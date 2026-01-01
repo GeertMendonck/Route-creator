@@ -49,6 +49,19 @@
   resize: horizontal;
   overflow:auto;
 }
+
+.locLabelIcon { background: transparent; border: none; }
+.locLabelBubble{
+  transform: translate(-50%, -38px);
+  padding: 2px 6px;
+  border-radius: 10px;
+  border: 1px solid #cfcfcf;
+  background: rgba(255,255,255,.92);
+  font-size: 11px;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0,0,0,.12);
+}
+
   </style>
 </head>
 
@@ -167,9 +180,10 @@
     </table>
 
     <h3>Locaties</h3>
-    <div class="btnbar">
-      <button id="btnAddLoc">+ Locatie (zonder kaart)</button>
+    <div class="note mini" style="margin:8px 0">
+     Klik op de kaart om een locatie toe te voegen.
     </div>
+
     <table id="locsTable">
       <thead>
         <tr>
@@ -386,12 +400,16 @@
 byId('btnAddSlot').addEventListener('click', function(){
   var id = uniqueId('stop', DATA.slots, 'id');
 
-  // default unlockAfterSlot = vorige slot (als die bestaat), anders leeg
-  var prevId = '';
-  if(DATA.slots && DATA.slots.length){
-    var prev = DATA.slots[DATA.slots.length - 1];
-    if(prev && prev.id) prevId = prev.id;
-  }
+  // default unlockAfterSlot = vorige required slot (als dat bestaat), anders leeg
+       var prevId = '';
+      for(var p = DATA.slots.length - 1; p >= 0; p--){
+      var prev = DATA.slots[p];
+      if(prev && prev.id && prev.required){
+        prevId = prev.id;
+        break;
+      }
+}
+
 
   var newSlot = { id:id, label:id, required:true };
   if(prevId) newSlot.unlockAfterSlot = prevId; // ✅ ketting-default
@@ -404,10 +422,6 @@ byId('btnAddSlot').addEventListener('click', function(){
 });
 
 
-    // locaties
-    byId('btnAddLoc').addEventListener('click', function(){
-      addLocFromMap(DATA.prestart.meetingPoint.lat, DATA.prestart.meetingPoint.lng);
-    });
   }
 
   function setMeetingPoint(lat,lng){
@@ -655,6 +669,13 @@ function makePrestartStartSlot(){
 
 
   // --------- Location add/render ----------
+  function getLastRadiusDefault(){
+  if(DATA.locaties && DATA.locaties.length){
+    var last = DATA.locaties[DATA.locaties.length-1];
+    if(last && typeof last.radius === 'number' && !isNaN(last.radius)) return last.radius;
+  }
+  return 30;
+}
   function addLocFromMap(lat,lng){
     var locId = prompt('Locatie id?', uniqueId('loc', DATA.locaties, 'id'));
     if(!locId) return;
@@ -663,8 +684,13 @@ function makePrestartStartSlot(){
       return;
     }
 
-    var sids = slotIds();
-    var slot = prompt('Slot id? (bv. start, stop01, end)', sids.length ? sids[0] : 'start');
+   var sids = slotIds();
+    var lastSlotId = (DATA.slots && DATA.slots.length && DATA.slots[DATA.slots.length-1].id)
+      ? DATA.slots[DATA.slots.length-1].id
+      : 'start';
+
+    var slot = prompt('Slot id? (bv. start, stop01, end)', lastSlotId);
+    if(!slot) slot = lastSlotId;
     if(!slot) slot = 'start';
 
     var naam = prompt('Naam?', locId) || locId;
@@ -675,7 +701,7 @@ function makePrestartStartSlot(){
       naam: naam,
       lat: lat,
       lng: lng,
-      radius: 50,
+      radius: getLastRadiusDefault(),
       images: [],
       routeHint: '',
       uitleg: { kort:'', uitgebreid:'' },
@@ -710,6 +736,14 @@ function makePrestartStartSlot(){
     var txt = mp.label ? mp.label : 'Meeting point';
     meetingMarker.bindPopup('<b>'+esc(txt)+'</b>').closePopup();
   }
+function makeLabeledIcon(id, slot){
+  var txt = (id || '') + (slot ? (' • ' + slot) : '');
+  return L.divIcon({
+    className: 'locLabelIcon',
+    html: '<div class="locLabelBubble">'+esc(txt)+'</div>',
+    iconSize: [1,1]
+  });
+}
 
   function renderLocMarkers(){
     markerLayer.clearLayers();
@@ -720,7 +754,11 @@ function makePrestartStartSlot(){
         var loc = DATA.locaties[i];
         if(!loc || loc.lat==null || loc.lng==null) return;
 
-        var m = L.marker([loc.lat, loc.lng], { draggable:true });
+        var m = L.marker([loc.lat, loc.lng], {
+        draggable:true,
+        icon: makeLabeledIcon(loc.id, loc.slot)
+      });
+
         m.addTo(markerLayer);
 
         var c = L.circle([loc.lat, loc.lng], { radius: (loc.radius||50), weight:1, fillOpacity:0.08 });
@@ -791,7 +829,7 @@ function makePrestartStartSlot(){
 
       // completeMode
       html += '<td><select data-i="'+i+'" data-k="completeMode" class="slotSel">';
-      var modes = ['', 'random', 'fixed'];
+      var modes = ['', 'all', 'any', 'nearest', 'random'];
       for(var k=0;k<modes.length;k++){
         var mv = modes[k];
         var sel2 = (s.completeMode===mv) ? 'selected' : '';
@@ -807,16 +845,22 @@ function makePrestartStartSlot(){
     // bind slot inputs
     var inps = tb.querySelectorAll('.slotInp');
     for(var a=0;a<inps.length;a++){
-      inps[a].addEventListener('input', function(){
-        var i = parseInt(this.getAttribute('data-i'),10);
-        var k = this.getAttribute('data-k');
-        DATA.slots[i][k] = this.value;
-        // if id changed: update dropdowns + loc slot dropdowns
-        renderSlotsTable();
-        renderLocsTable();
-        renderPrestartUseLocationDropdown();
-        validateAndRender();
-      });
+   inps[a].addEventListener('input', function(){
+  var i = parseInt(this.getAttribute('data-i'),10);
+  var k = this.getAttribute('data-k');
+  DATA.slots[i][k] = this.value;
+  // alleen lichte dingen:
+  validateAndRender();
+});
+
+inps[a].addEventListener('blur', function(){
+  // nu pas dropdowns etc. heropbouwen
+  renderSlotsTable();
+  renderLocsTable();
+  renderPrestartUseLocationDropdown();
+  validateAndRender();
+});
+
     }
     var chks = tb.querySelectorAll('.slotChk');
     for(var b=0;b<chks.length;b++){
@@ -1220,6 +1264,8 @@ function makePrestartStartSlot(){
         DATA = obj;
         syncUIFromData();
         renderAll();
+        fitMapToData();
+
       }catch(e){
         alert('Import mislukt: ' + (e && e.message ? e.message : e));
       }finally{
@@ -1271,6 +1317,30 @@ function makePrestartStartSlot(){
 
     validateAndRender();
   }
+
+    function fitMapToData(){
+      var pts = [];
+
+      // meeting point
+      if(DATA.prestart && DATA.prestart.meetingPoint){
+        var mp = DATA.prestart.meetingPoint;
+        if(mp.lat != null && mp.lng != null) pts.push([mp.lat, mp.lng]);
+      }
+
+      // locaties
+      for(var i=0;i<DATA.locaties.length;i++){
+        var l = DATA.locaties[i];
+        if(l && l.lat != null && l.lng != null) pts.push([l.lat, l.lng]);
+      }
+
+      if(!pts.length) return;
+
+      try{
+        var bounds = L.latLngBounds(pts);
+        map.fitBounds(bounds, { padding:[30,30], animate:true });
+      }catch(e){}
+    }
+
 
   // --------- Init ----------
   bindUI();
