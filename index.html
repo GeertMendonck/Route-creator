@@ -159,7 +159,7 @@
           <th style="width:22%">label</th>
           <th style="width:10%">req</th>
           <th style="width:25%">unlockAfter</th>
-          <th style="width:15%">complete</th>
+          <th style="width:15%">completeMode</th>
           <th style="width:10%"></th>
         </tr>
       </thead>
@@ -383,13 +383,26 @@
 
 
     // slots
-    byId('btnAddSlot').addEventListener('click', function(){
-      var id = uniqueId('stop', DATA.slots, 'id');
-      DATA.slots.push({ id:id, label:id, required:true, unlockAfterSlot:'' });
-      renderSlotsTable();
-      renderLocsTable();
-      validateAndRender();
-    });
+byId('btnAddSlot').addEventListener('click', function(){
+  var id = uniqueId('stop', DATA.slots, 'id');
+
+  // default unlockAfterSlot = vorige slot (als die bestaat), anders leeg
+  var prevId = '';
+  if(DATA.slots && DATA.slots.length){
+    var prev = DATA.slots[DATA.slots.length - 1];
+    if(prev && prev.id) prevId = prev.id;
+  }
+
+  var newSlot = { id:id, label:id, required:true };
+  if(prevId) newSlot.unlockAfterSlot = prevId; // ✅ ketting-default
+
+  DATA.slots.push(newSlot);
+
+  renderSlotsTable();
+  renderLocsTable();
+  validateAndRender();
+});
+
 
     // locaties
     byId('btnAddLoc').addEventListener('click', function(){
@@ -755,15 +768,26 @@ function makePrestartStartSlot(){
       html += '<td><input data-i="'+i+'" data-k="label" class="slotInp" type="text" value="'+esc(s.label||'')+'"></td>';
       html += '<td style="text-align:center"><input data-i="'+i+'" data-k="required" class="slotChk" type="checkbox" '+(s.required?'checked':'')+'></td>';
 
-      // unlockAfterSlot dropdown
+      // unlockAfterSlot dropdown (toon alle slots behalve zichzelf)
       html += '<td><select data-i="'+i+'" data-k="unlockAfterSlot" class="slotSel">';
       html += '<option value=""></option>';
+
+      // als import ooit unlockAfterSlot = zichzelf zette: toon dat expliciet als waarschuwing-optie
+      if(s.unlockAfterSlot && s.id && s.unlockAfterSlot === s.id){
+        html += '<option value="'+esc(s.id)+'" selected>⚠ '+esc(s.id)+' (ongeldig: zichzelf)</option>';
+      }
+
       for(var j=0;j<sids.length;j++){
         var sid = sids[j];
-        var sel = (s.unlockAfterSlot===sid) ? 'selected' : '';
+
+        // voorkom self-reference
+        if(s.id && sid === s.id) continue;
+
+        var sel = (s.unlockAfterSlot === sid) ? 'selected' : '';
         html += '<option value="'+esc(sid)+'" '+sel+'>'+esc(sid)+'</option>';
       }
       html += '</select></td>';
+
 
       // completeMode
       html += '<td><select data-i="'+i+'" data-k="completeMode" class="slotSel">';
@@ -1056,6 +1080,10 @@ function makePrestartStartSlot(){
         ' unlockAfterSlot bestaat niet: ' + ss.unlockAfterSlot
       );
     }
+    if(ss && ss.id && ss.unlockAfterSlot && ss.unlockAfterSlot === ss.id){
+    issues.errors.push('Slot ' + ss.id + ' unlockAfterSlot verwijst naar zichzelf.');
+}
+
   }
 
   // ---- required slots zonder locaties ----
