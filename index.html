@@ -130,6 +130,16 @@
   background: rgba(123,76,255,.06);
   opacity: .9;
 }
+.mapLegend .lgArrowReq{
+  border: 3px solid rgba(0,0,0,.55);
+  background: rgba(0,0,0,.08);
+}
+.mapLegend .lgArrowOpt{
+  border: 3px dashed rgba(0,0,0,.45);
+  background: rgba(0,0,0,.05);
+  opacity: .8;
+}
+
 .slotBadge{
   display:inline-block;
   margin-left:6px;
@@ -140,6 +150,26 @@
   color:#fff;
   font-weight:700;
   line-height:1.4;
+}
+
+.arrowIcon{
+  width:0; height:0;
+  border-left:7px solid transparent;
+  border-right:7px solid transparent;
+  border-top:12px solid rgba(0,0,0,.55); /* pijl-kleur */
+  filter: drop-shadow(0 1px 2px rgba(255,255,255,.9));
+}
+.mapLegend .lgToggle{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:8px;
+  padding-top:8px;
+  border-top:1px solid #e5e5e5;
+  font-size:12px;
+}
+.mapLegend input[type="checkbox"]{
+  transform: scale(1.05);
 }
 
 
@@ -324,6 +354,8 @@
       ],
       locaties: []
     };
+
+
   }
 
   var DATA = defaultData();
@@ -344,14 +376,42 @@ div.innerHTML =
   '<div class="lgRow"><span class="lgSwatch lgReqMulti"></span> Vereist (meerdere locaties)</div>' +
   '<div class="lgRow"><span class="lgSwatch lgOptSingle"></span> Optioneel</div>' +
   '<div class="lgRow"><span class="lgSwatch lgOptMulti"></span> Optioneel (meerdere locaties)</div>';
+ div.innerHTML +=
+  '<div class="lgToggle">' +
+  '  <input id="toggleRouteArrows" type="checkbox" checked>' +
+  '  <label for="toggleRouteArrows" style="cursor:pointer">Toon routepijlen</label>' +
+  '</div>';
+  div.innerHTML +=
+  '<div id="arrowLegendDetails" style="margin-top:6px">' +
+  '  <div class="lgRow"><span class="lgSwatch lgArrowReq"></span> Route naar vereist</div>' +
+  '  <div class="lgRow"><span class="lgSwatch lgArrowOpt"></span> Route naar optioneel</div>' +
+  '</div>';
+
+
   // voorkomen dat scroll/drag op de kaart “meepakt” als je op de legenda klikt
   L.DomEvent.disableClickPropagation(div);
   L.DomEvent.disableScrollPropagation(div);
   return div;
 };
 legendCtrl.addTo(map);
+setTimeout(function(){
+  var cb = document.getElementById('toggleRouteArrows');
+  if(cb){
+    cb.addEventListener('change', function(){
+      showRouteArrows = !!cb.checked;
+      drawRouteArrows();
+        var details = document.getElementById('arrowLegendDetails');
+  if(details){
+    details.style.display = showRouteArrows ? 'block' : 'none';
+  }
+    });
+  }
+}, 0);
 
   var markerLayer = L.layerGroup().addTo(map);
+  var routeLayer = L.layerGroup().addTo(map);
+  var showRouteArrows = true;
+
   var meetingMarker = null;
 
   // locationId -> {marker, circle}
@@ -420,6 +480,93 @@ function getSlotLocationCounts(){
     counts[l.slot] = (counts[l.slot] || 0) + 1;
   }
   return counts;
+}
+function getSlotCenters(){
+  // slotId -> {lat,lng}
+  var sums = {}, counts = {};
+  for(var i=0;i<DATA.locaties.length;i++){
+    var l = DATA.locaties[i];
+    if(!l || !l.slot) continue;
+    if(l.lat == null || l.lng == null) continue;
+
+    if(!sums[l.slot]) sums[l.slot] = { lat:0, lng:0 };
+    sums[l.slot].lat += l.lat;
+    sums[l.slot].lng += l.lng;
+    counts[l.slot] = (counts[l.slot] || 0) + 1;
+  }
+
+  var centers = {};
+  for(var sid in sums){
+    centers[sid] = {
+      lat: sums[sid].lat / counts[sid],
+      lng: sums[sid].lng / counts[sid]
+    };
+  }
+  return centers;
+}
+
+function addArrowAt(latlng, angleDeg, isRequired){
+  var op = isRequired ? 0.75 : 0.45;
+  var icon = L.divIcon({
+    className: '',
+    html:
+      '<div class="arrowIcon" style="opacity:'+op+';transform: rotate('+angleDeg+'deg)"></div>',
+    iconSize: [0,0]
+  });
+  return L.marker(latlng, { icon: icon, interactive:false });
+}
+
+
+function bearingDeg(from, to){
+  // simpele bearing in graden (voldoende voor visueel)
+  var dy = to.lat - from.lat;
+  var dx = to.lng - from.lng;
+  var rad = Math.atan2(dy, dx);
+  return rad * 180 / Math.PI;
+}
+
+function drawRouteArrows(){
+  routeLayer.clearLayers();
+  if(!showRouteArrows) return;
+
+  var centers = getSlotCenters();
+  if(!centers) return;
+
+  // teken pijl van unlockAfterSlot -> slot.id
+  for(var i=0;i<DATA.slots.length;i++){
+    var s = DATA.slots[i];
+    if(!s || !s.id || !s.unlockAfterSlot) continue;
+
+    var fromId = s.unlockAfterSlot;
+    var toId = s.id;
+
+    var from = centers[fromId];
+    var to = centers[toId];
+    if(!from || !to) continue;
+
+    // lijn
+      var toRequired = isSlotRequired(toId);
+
+      var lineOpts = toRequired
+        ? { weight: 2, opacity: 0.65 }
+        : { weight: 2, opacity: 0.45, dashArray: '8 10', lineCap: 'butt' };
+
+      var line = L.polyline([[from.lat, from.lng],[to.lat, to.lng]], lineOpts)
+        .addTo(routeLayer);
+
+
+    // pijl net voor het eindpunt (zodat het niet exact op de cirkelrand zit)
+    var t = 0.85;
+    var arrowPos = {
+      lat: from.lat + (to.lat - from.lat) * t,
+      lng: from.lng + (to.lng - from.lng) * t
+    };
+
+    // rotatie: triangle wijst standaard "omhoog" (border-top), dus +90° verschuiving
+    var ang = bearingDeg(from, to) + 90;
+    addArrowAt(arrowPos, ang, toRequired).addTo(routeLayer);
+
+  }
 }
 
   // --------- UI bind ----------
@@ -1432,6 +1579,12 @@ inps[a].addEventListener('blur', function(){
           try { map.invalidateSize(true); } catch(e){}
           try { renderLocMarkers(); } catch(e){}
         }, 50);
+              setTimeout(function(){
+        try { map.invalidateSize(true); } catch(e){}
+        try { renderLocMarkers(); } catch(e){}
+        try { drawRouteArrows(); } catch(e){}
+      }, 50);
+
         fitMapToData();
 
       }catch(e){
@@ -1476,6 +1629,7 @@ inps[a].addEventListener('blur', function(){
     renderSlotsTable();
     renderLocsTable();
     renderLocMarkers();
+    drawRouteArrows();
     renderPrestartUseLocationDropdown();
 
     // ensure prestart.useLocationId selected
