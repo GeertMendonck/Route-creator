@@ -88,13 +88,16 @@
     <label>visibilityMode</label>
     <select id="setVisibilityMode">
       <option value="nextOnly">nextOnly</option>
+      <option value="allAfterStart">allAfterStart</option>
       <option value="all">all</option>
     </select>
 
     <label>multiLocationSlotMode</label>
     <select id="setMultiLocSlotMode">
+      <option value="any">any</option>
+      <option value="random">random</option>
+      <option value="nearest">nearest</option>
       <option value="all">all</option>
-      <option value="first">first</option>
     </select>
 
     <div class="row" style="margin-top:8px">
@@ -127,12 +130,17 @@
     <div class="btnbar">
       <button id="btnSetMeetingPoint">Meeting point zetten via kaartklik</button>
     </div>
+    <div class="btnbar">
+    <button id="btnMakePrestartStartSlot">Maak prestart = startslot + startlocatie</button>
+    </div>
+
 
     <label>message</label>
     <textarea id="preMessage"></textarea>
 
     <label>maps.label</label>
     <input id="preMapsLabel" type="text" placeholder="Route naar startpunt" />
+    <button id="btnSyncPrestartStart">Sync prestart → startslot+startloc (veilig)</button>
 
     <h3>Slots</h3>
     <div class="btnbar">
@@ -283,8 +291,9 @@
   function bindUI(){
     byId('btnNew').addEventListener('click', function(){
       DATA = defaultData();
-      syncUIFromData();
-      renderAll();
+     syncPrestartToStartData();
+     syncUIFromData();
+     renderAll();
     });
 
     byId('btnExport').addEventListener('click', exportJson);
@@ -333,6 +342,39 @@
       meetingPickMode = true;
       alert('Klik nu op de kaart om het meeting point te zetten.');
     });
+    byId('btnMakePrestartStartSlot').addEventListener('click', function(){
+    makePrestartStartSlot();
+    });
+    // prestart en start synchroniseren
+      byId('preUseLocationId').addEventListener('change', function(){
+        DATA.prestart.useLocationId = this.value;
+        syncPrestartToStartData();
+        renderAll();
+      });
+
+      byId('preMeetingLat').addEventListener('input', function(){
+        DATA.prestart.meetingPoint.lat = parseFloat(this.value||0);
+        syncPrestartToStartData();
+        renderAll();
+      });
+
+      byId('preMeetingLng').addEventListener('input', function(){
+        DATA.prestart.meetingPoint.lng = parseFloat(this.value||0);
+        syncPrestartToStartData();
+        renderAll();
+      });
+
+      byId('preMeetingLabel').addEventListener('input', function(){
+        DATA.prestart.meetingPoint.label = this.value;
+        syncPrestartToStartData();
+        renderAll();
+      });
+      byId('btnSyncPrestartStart').addEventListener('click', function(){
+        syncPrestartToStartDataNonDestructive();
+        syncUIFromData();
+        renderAll();
+      });
+
 
     // slots
     byId('btnAddSlot').addEventListener('click', function(){
@@ -355,6 +397,243 @@
     byId('preMeetingLat').value = lat;
     byId('preMeetingLng').value = lng;
   }
+  function ensureStartSlot(){
+  // bestaat slot 'start'?
+  for(var i=0;i<DATA.slots.length;i++){
+    if(DATA.slots[i] && DATA.slots[i].id === 'start') return;
+  }
+  // voeg startslot toe (vooraan)
+  DATA.slots.unshift({ id:'start', label:'Start', required:true });
+}
+function syncPrestartToStartData(){
+  if(!DATA.prestart) DATA.prestart = defaultData().prestart;
+
+  // 1) Zorg dat startslot bestaat (en liefst als eerste)
+  var hasStart = false;
+  for(var i=0;i<DATA.slots.length;i++){
+    if(DATA.slots[i] && DATA.slots[i].id === 'start'){ hasStart = true; break; }
+  }
+  if(!hasStart){
+    DATA.slots.unshift({ id:'start', label:'Start', required:true });
+  }else{
+    // optioneel: zet start naar voren (comment out als je dit niet wil)
+    // var idx=-1;
+    // for(var j=0;j<DATA.slots.length;j++) if(DATA.slots[j] && DATA.slots[j].id==='start'){ idx=j; break; }
+    // if(idx>0){ var s=DATA.slots.splice(idx,1)[0]; DATA.slots.unshift(s); }
+  }
+
+  // 2) Bepaal startlocatie-id
+  var startLocId = DATA.prestart.useLocationId;
+  if(!startLocId){
+    // kies een nette default id
+    startLocId = 'startloc';
+    var n=1;
+    while(findLocById(startLocId)){
+      n++;
+      startLocId = 'startloc' + n;
+    }
+    DATA.prestart.useLocationId = startLocId;
+  }
+
+  // 3) Zorg dat startlocatie bestaat
+  var loc = findLocById(startLocId);
+  if(!loc){
+    loc = {
+      id: startLocId,
+      slot: 'start',
+      naam: 'Start',
+      lat: null,
+      lng: null,
+      radius: 50,
+      images: [],
+      routeHint: '',
+      uitleg: { kort:'', uitgebreid:'' },
+      vragen: []
+    };
+    DATA.locaties.unshift(loc); // bovenaan
+  }
+
+  // 4) Forceer dat die locatie aan slot "start" hangt
+  loc.slot = 'start';
+
+  // 5) Synchroniseer gegevens vanuit prestart
+  var mp = DATA.prestart.meetingPoint;
+  if(mp){
+    if(mp.lat != null) loc.lat = mp.lat;
+    if(mp.lng != null) loc.lng = mp.lng;
+
+    // naam is smaak: ik zou label hergebruiken als die bestaat
+    if(mp.label){
+      loc.naam = 'Start: ' + mp.label;
+    }else if(!loc.naam || loc.naam === 'Start'){
+      loc.naam = 'Start';
+    }
+
+    // Als meetingPoint geen lat/lng heeft maar locatie wel, vul meetingPoint dan terug
+    if((mp.lat == null || mp.lng == null) && (loc.lat != null && loc.lng != null)){
+      mp.lat = loc.lat; mp.lng = loc.lng;
+    }
+  }else{
+    // Als meetingPoint ontbreekt, maak er een op basis van locatie
+    DATA.prestart.meetingPoint = { lat: loc.lat, lng: loc.lng, label: 'Start' };
+  }
+}
+function syncPrestartToStartDataNonDestructive(){
+  if(!DATA) return;
+
+  // Zorg dat blokken bestaan
+  if(!DATA.meta) DATA.meta = { title:'(import)', subtitle:'', version:'1.0' };
+  if(!DATA.settings) DATA.settings = defaultData().settings;
+  if(!DATA.prestart) DATA.prestart = defaultData().prestart;
+  if(!DATA.slots) DATA.slots = [];
+  if(!DATA.locaties) DATA.locaties = [];
+
+  // 1) Startslot: enkel toevoegen als het ontbreekt
+  var hasStartSlot = false;
+  for(var i=0;i<DATA.slots.length;i++){
+    if(DATA.slots[i] && DATA.slots[i].id === 'start'){ hasStartSlot = true; break; }
+  }
+  if(!hasStartSlot){
+    DATA.slots.unshift({ id:'start', label:'Start', required:true });
+  }
+
+  // 2) Bepaal startlocatie-id: enkel invullen als leeg
+  var startLocId = (DATA.prestart && DATA.prestart.useLocationId) ? DATA.prestart.useLocationId : '';
+  if(!startLocId){
+    // kies een id die nog niet bestaat
+    var base = 'startloc';
+    var id = base;
+    var n = 1;
+    while(findLocById(id)){
+      n++;
+      id = base + n;
+    }
+    startLocId = id;
+    DATA.prestart.useLocationId = startLocId;
+  }
+
+  // 3) Startlocatie: enkel aanmaken als ze niet bestaat
+  var loc = findLocById(startLocId);
+  if(!loc){
+    loc = {
+      id: startLocId,
+      slot: 'start',
+      naam: 'Start',
+      lat: null,
+      lng: null,
+      radius: 50,
+      images: [],
+      routeHint: '',
+      uitleg: { kort:'', uitgebreid:'' },
+      vragen: []
+    };
+    DATA.locaties.unshift(loc);
+  } else {
+    // slot enkel zetten als het leeg is (niet overschrijven)
+    if(!loc.slot) loc.slot = 'start';
+  }
+
+  // 4) meetingPoint: enkel aanvullen als ontbreekt/onklaar
+  if(!DATA.prestart.meetingPoint){
+    DATA.prestart.meetingPoint = { lat:null, lng:null, label:'Start' };
+  }
+  var mp = DATA.prestart.meetingPoint;
+
+  if(!mp.label) mp.label = 'Start';
+
+  // Vul mp lat/lng aan vanuit locatie als mp leeg is
+  if((mp.lat == null || mp.lng == null) && (loc.lat != null && loc.lng != null)){
+    if(mp.lat == null) mp.lat = loc.lat;
+    if(mp.lng == null) mp.lng = loc.lng;
+  }
+
+  // Vul locatie lat/lng aan vanuit mp als locatie leeg is
+  if((loc.lat == null || loc.lng == null) && (mp.lat != null && mp.lng != null)){
+    if(loc.lat == null) loc.lat = mp.lat;
+    if(loc.lng == null) loc.lng = mp.lng;
+  }
+
+  // Radius: enkel zetten als ontbreekt
+  if(loc.radius == null) loc.radius = 50;
+
+  // Naam: enkel zetten als leeg
+  if(!loc.naam) loc.naam = 'Start';
+}
+
+function getFirstStartLocationId(){
+  // zoekt eerste locatie met slot 'start'
+  for(var i=0;i<DATA.locaties.length;i++){
+    var l = DATA.locaties[i];
+    if(l && l.slot === 'start' && l.id) return l.id;
+  }
+  return null;
+}
+
+function createStartLocationFromMeetingPoint(){
+  var mp = (DATA.prestart && DATA.prestart.meetingPoint) ? DATA.prestart.meetingPoint : null;
+  var lat = mp && mp.lat!=null ? mp.lat : 51.220418;
+  var lng = mp && mp.lng!=null ? mp.lng : 4.440854;
+
+  // kies een nette id die nog niet bestaat
+  var base = 'startloc';
+  var id = base;
+  var n = 1;
+  while(findLocById(id)){
+    n++;
+    id = base + n;
+  }
+
+  var naam = 'Startlocatie';
+  if(mp && mp.label) naam = 'Start: ' + mp.label;
+
+  var loc = {
+    id: id,
+    slot: 'start',
+    naam: naam,
+    lat: lat,
+    lng: lng,
+    radius: 50,
+    images: [],
+    routeHint: '',
+    uitleg: { kort:'', uitgebreid:'' },
+    vragen: []
+  };
+
+  DATA.locaties.unshift(loc); // startloc bovenaan
+  return id;
+}
+
+function makePrestartStartSlot(){
+  ensureStartSlot();
+
+  // 1) Zorg dat er een startlocatie bestaat
+  var startLocId = getFirstStartLocationId();
+  if(!startLocId){
+    startLocId = createStartLocationFromMeetingPoint();
+  }
+
+  // 2) Koppel prestart aan die startlocatie
+  if(!DATA.prestart) DATA.prestart = defaultData().prestart;
+  DATA.prestart.useLocationId = startLocId;
+
+  // 3) Sync meetingPoint naar startloc (zodat alles netjes samenvalt)
+  var loc = findLocById(startLocId);
+  if(loc){
+    if(!DATA.prestart.meetingPoint) DATA.prestart.meetingPoint = { lat:loc.lat, lng:loc.lng, label:'Start' };
+    DATA.prestart.meetingPoint.lat = loc.lat;
+    DATA.prestart.meetingPoint.lng = loc.lng;
+
+    // label enkel invullen als die leeg is
+    if(!DATA.prestart.meetingPoint.label){
+      DATA.prestart.meetingPoint.label = 'Start';
+    }
+  }
+
+  // 4) UI refresh
+  syncUIFromData();
+  renderAll();
+}
+
 
   // --------- Location add/render ----------
   function addLocFromMap(lat,lng){
@@ -690,68 +969,143 @@
   }
 
   // --------- Validation ----------
-  function validate(){
-    var issues = { errors:[], warns:[], oks:[] };
+ function validate(){
+  var issues = { errors:[], warns:[], oks:[] };
 
-    // dup slot ids
-    var seenS = {};
-    for(var i=0;i<DATA.slots.length;i++){
-      var s = DATA.slots[i];
-      if(!s || !s.id) continue;
-      if(seenS[s.id]) issues.errors.push('Dubbele slot id: '+s.id);
-      seenS[s.id]=true;
-    }
+  // ---- allowed enum values ----
+  var ALLOWED_VIS = { nextOnly:true, all:true, allAfterStart:true };
+  var ALLOWED_MULTI = { all:true, any:true, nearest:true, random:true };
 
-    // dup loc ids + required fields
-    var seenL = {};
-    for(var j=0;j<DATA.locaties.length;j++){
-      var l = DATA.locaties[j];
-      if(!l || !l.id) continue;
-      if(seenL[l.id]) issues.errors.push('Dubbele locatie id: '+l.id);
-      seenL[l.id]=true;
-
-      if(l.lat==null || l.lng==null) issues.errors.push('Locatie zonder lat/lng: '+l.id);
-      if(l.slot && !seenS[l.slot]) issues.errors.push('Locatie '+l.id+' verwijst naar onbekend slot: '+l.slot);
-      if(l.radius!=null && (l.radius < 10)) issues.warns.push('Radius heel klein (<10m) bij '+l.id);
-      if(l.radius!=null && (l.radius > 1000)) issues.warns.push('Radius heel groot (>1000m) bij '+l.id);
-    }
-
-    // unlockAfterSlot references
-    for(var k=0;k<DATA.slots.length;k++){
-      var ss = DATA.slots[k];
-      if(ss && ss.unlockAfterSlot && !seenS[ss.unlockAfterSlot]){
-        issues.errors.push('Slot '+(ss.id||'?')+' unlockAfterSlot bestaat niet: '+ss.unlockAfterSlot);
-      }
-    }
-
-    // required slot without locations
-    var locCountBySlot = {};
-    for(var a=0;a<DATA.locaties.length;a++){
-      var ll = DATA.locaties[a];
-      if(!ll || !ll.slot) continue;
-      locCountBySlot[ll.slot] = (locCountBySlot[ll.slot]||0) + 1;
-    }
-    for(var b=0;b<DATA.slots.length;b++){
-      var rs = DATA.slots[b];
-      if(!rs || !rs.id) continue;
-      if(rs.required && (!locCountBySlot[rs.id])){
-        issues.warns.push('Required slot zonder locaties: '+rs.id);
-      }
-      if(rs.completeMode==='random' && (locCountBySlot[rs.id]||0) <= 1){
-        issues.warns.push('completeMode=random maar slechts 1 locatie in '+rs.id);
-      }
-    }
-
-    // prestart.useLocationId exists?
-    if(DATA.prestart.useLocationId){
-      if(!seenL[DATA.prestart.useLocationId]){
-        issues.errors.push('prestart.useLocationId bestaat niet: '+DATA.prestart.useLocationId);
-      }
-    }
-
-    if(issues.errors.length===0) issues.oks.push('Geen fouten gevonden.');
-    return issues;
+  var vis = DATA.settings && DATA.settings.visibilityMode;
+  if(vis && !ALLOWED_VIS[vis]){
+    issues.errors.push('settings.visibilityMode onbekend: ' + vis);
   }
+
+  var ml = DATA.settings && DATA.settings.multiLocationSlotMode;
+  if(ml && !ALLOWED_MULTI[ml]){
+    issues.errors.push('settings.multiLocationSlotMode onbekend: ' + ml);
+  }
+
+  // ---- slots ----
+  var seenSlots = {};
+  var hasStartSlot = false;
+
+  for(var i=0;i<DATA.slots.length;i++){
+    var s = DATA.slots[i];
+    if(!s || !s.id) continue;
+
+    if(seenSlots[s.id]){
+      issues.errors.push('Dubbele slot id: ' + s.id);
+    }
+    seenSlots[s.id] = true;
+
+    if(s.id === 'start') hasStartSlot = true;
+  }
+
+  if(vis === 'allAfterStart' && !hasStartSlot){
+    issues.warns.push('visibilityMode=allAfterStart maar slot "start" bestaat niet.');
+  }
+
+  // ---- locaties ----
+  var seenLocs = {};
+  var locCountBySlot = {};
+  var hasStartLocation = false;
+
+  for(var j=0;j<DATA.locaties.length;j++){
+    var l = DATA.locaties[j];
+    if(!l || !l.id) continue;
+
+    if(seenLocs[l.id]){
+      issues.errors.push('Dubbele locatie id: ' + l.id);
+    }
+    seenLocs[l.id] = true;
+
+    if(l.lat == null || l.lng == null){
+      issues.errors.push('Locatie zonder lat/lng: ' + l.id);
+    }
+
+    if(l.slot){
+      if(!seenSlots[l.slot]){
+        issues.errors.push('Locatie ' + l.id + ' verwijst naar onbekend slot: ' + l.slot);
+      }
+      locCountBySlot[l.slot] = (locCountBySlot[l.slot] || 0) + 1;
+    }
+
+    if(l.slot === 'start') hasStartLocation = true;
+
+    if(l.radius != null && l.radius < 10){
+      issues.warns.push('Radius < 10m bij locatie ' + l.id);
+    }
+    if(l.radius != null && l.radius > 1000){
+      issues.warns.push('Radius > 1000m bij locatie ' + l.id);
+    }
+  }
+
+  // ---- unlockAfterSlot ----
+  for(var k=0;k<DATA.slots.length;k++){
+    var ss = DATA.slots[k];
+    if(ss && ss.unlockAfterSlot && !seenSlots[ss.unlockAfterSlot]){
+      issues.errors.push(
+        'Slot ' + (ss.id || '?') +
+        ' unlockAfterSlot bestaat niet: ' + ss.unlockAfterSlot
+      );
+    }
+  }
+
+  // ---- required slots zonder locaties ----
+  for(var sid in seenSlots){
+    var slotObj = null;
+    for(var z=0;z<DATA.slots.length;z++){
+      if(DATA.slots[z].id === sid){ slotObj = DATA.slots[z]; break; }
+    }
+    if(slotObj && slotObj.required && !locCountBySlot[sid]){
+      issues.warns.push('Required slot zonder locaties: ' + sid);
+    }
+    if(slotObj && slotObj.completeMode === 'random' && (locCountBySlot[sid]||0) <= 1){
+      issues.warns.push('completeMode=random maar slechts 1 locatie in slot ' + sid);
+    }
+  }
+
+  // ---- multiLocationSlotMode heeft geen effect ----
+  if(ml && ml !== 'all'){
+    var anyMulti = false;
+    for(var s2 in locCountBySlot){
+      if(locCountBySlot[s2] > 1){ anyMulti = true; break; }
+    }
+    if(!anyMulti){
+      issues.warns.push(
+        'multiLocationSlotMode=' + ml +
+        ' maar geen enkel slot heeft meerdere locaties.'
+      );
+    }
+  }
+
+  // ---- prestart checks (vriendelijk, niet dwingend) ----
+  var ps = DATA.prestart || {};
+  var psLocId = ps.useLocationId;
+
+  if(psLocId && !seenLocs[psLocId]){
+    issues.warns.push(
+      'prestart.useLocationId verwijst naar een niet-bestaande locatie (' +
+      psLocId + ').'
+    );
+  }
+
+  // 👉 DE BELANGRIJKSTE: oude / prestart-only stijl detecteren
+  if(ps && (!ps.useLocationId || !hasStartSlot || !hasStartLocation)){
+    issues.warns.push(
+      'Deze route gebruikt een prestart zonder bijhorende startslot/startlocatie. ' +
+      'Dit is toegestaan, maar de builder werkt beter na “Sync prestart → startslot”.'
+    );
+  }
+
+  // ---- OK ----
+  if(issues.errors.length === 0){
+    issues.oks.push('Geen blokkerende fouten gevonden.');
+  }
+
+  return issues;
+}
 
   function renderValidation(){
     var v = validate();
@@ -886,8 +1240,9 @@
 
   // --------- Init ----------
   bindUI();
-  syncUIFromData();
-  renderAll();
+  // syncUIFromData();
+  // renderAll();
+  makePrestartStartSlot();
 
 })();
 </script>
