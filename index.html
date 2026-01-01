@@ -1,0 +1,895 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Geo Route Builder (v1)</title>
+
+  <!-- Leaflet (CDN) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    body{ margin:0; font-family:system-ui,Segoe UI,Roboto,Arial; }
+    .wrap{ display:flex; height:100vh; }
+    .left{ width:420px; min-width:320px; max-width:520px; overflow:auto; border-right:1px solid #ddd; padding:12px; box-sizing:border-box; }
+    .right{ flex:1; position:relative; }
+    #map{ position:absolute; inset:0; }
+    h2{ margin:6px 0 10px; font-size:18px; }
+    h3{ margin:14px 0 8px; font-size:14px; opacity:.85; }
+    label{ display:block; font-size:12px; margin:6px 0 2px; opacity:.85; }
+    input[type="text"], input[type="number"], textarea, select{
+      width:100%; box-sizing:border-box; padding:8px; border:1px solid #ccc; border-radius:8px;
+    }
+    textarea{ min-height:60px; resize:vertical; }
+    .row{ display:flex; gap:8px; }
+    .row > div{ flex:1; }
+    .btnbar{ display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
+    button{
+      padding:8px 10px; border:1px solid #bbb; background:#fff; border-radius:10px; cursor:pointer;
+    }
+    button:hover{ background:#f6f6f6; }
+    table{ width:100%; border-collapse:collapse; font-size:12px; }
+    th, td{ border-bottom:1px solid #eee; padding:6px 4px; vertical-align:top; }
+    th{ text-align:left; position:sticky; top:0; background:#fff; z-index:1; }
+    .mini{ font-size:11px; opacity:.75; }
+    .pill{
+      display:inline-block; padding:2px 8px; border:1px solid #ddd; border-radius:999px; font-size:11px; margin-left:6px;
+    }
+    .err{ color:#b00020; }
+    .warn{ color:#8a5a00; }
+    .ok{ color:#0a7a2f; }
+    .note{ background:#f7f7f7; border:1px solid #e9e9e9; padding:8px; border-radius:10px; }
+    .split{ display:flex; gap:8px; align-items:center; }
+    .split input[type="checkbox"]{ transform:scale(1.1); }
+    .linklike{ color:#0b63ce; cursor:pointer; text-decoration:underline; }
+  </style>
+</head>
+
+<body>
+<div class="wrap">
+  <div class="left">
+    <h2>Geo Route Builder <span class="pill">v1</span></h2>
+    <div class="note mini">
+      Klik op de kaart om een locatie toe te voegen. Sleep markers om lat/lng te wijzigen.
+      Gebruik “Export” om je JSON te downloaden.
+    </div>
+
+    <div class="btnbar">
+      <button id="btnNew">Nieuw</button>
+      <button id="btnExport">Export JSON</button>
+      <label style="display:inline-block">
+        <input id="fileImport" type="file" accept=".json" style="display:none">
+        <button id="btnImport">Import JSON</button>
+      </label>
+    </div>
+
+    <h3>Meta</h3>
+    <label>Titel</label>
+    <input id="metaTitle" type="text" />
+    <label>Subtitel</label>
+    <input id="metaSubtitle" type="text" />
+    <label>Versie</label>
+    <input id="metaVersion" type="text" />
+
+    <div class="split" style="margin-top:8px">
+      <input id="metaCharactersEnabled" type="checkbox">
+      <div style="flex:1">
+        <div><b>Personages gebruiken</b> <span class="pill mini">optioneel</span></div>
+        <div class="mini">Als je dit aanzet, exporteren we <code>meta.characters</code> mee.</div>
+      </div>
+    </div>
+    <div id="metaCharactersBox" style="display:none; margin-top:6px">
+      <label>Personages bronbestand</label>
+      <input id="metaCharactersSource" type="text" placeholder="personages.json" />
+    </div>
+
+    <h3>Settings</h3>
+    <label>visibilityMode</label>
+    <select id="setVisibilityMode">
+      <option value="nextOnly">nextOnly</option>
+      <option value="all">all</option>
+    </select>
+
+    <label>multiLocationSlotMode</label>
+    <select id="setMultiLocSlotMode">
+      <option value="all">all</option>
+      <option value="first">first</option>
+    </select>
+
+    <div class="row" style="margin-top:8px">
+      <div class="split"><input id="setShowOptionalSlots" type="checkbox"><div>showOptionalSlots</div></div>
+      <div class="split"><input id="setListShowFutureSlots" type="checkbox"><div>listShowFutureSlots</div></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="split"><input id="setMapShowFutureLocations" type="checkbox"><div>mapShowFutureLocations</div></div>
+      <div></div>
+    </div>
+
+    <h3>Prestart</h3>
+    <label>useLocationId</label>
+    <select id="preUseLocationId"></select>
+
+    <label>meetingPoint label</label>
+    <input id="preMeetingLabel" type="text" placeholder="Aan de voordeur" />
+
+    <div class="row">
+      <div>
+        <label>meetingPoint lat</label>
+        <input id="preMeetingLat" type="number" step="any" />
+      </div>
+      <div>
+        <label>meetingPoint lng</label>
+        <input id="preMeetingLng" type="number" step="any" />
+      </div>
+    </div>
+
+    <div class="btnbar">
+      <button id="btnSetMeetingPoint">Meeting point zetten via kaartklik</button>
+    </div>
+
+    <label>message</label>
+    <textarea id="preMessage"></textarea>
+
+    <label>maps.label</label>
+    <input id="preMapsLabel" type="text" placeholder="Route naar startpunt" />
+
+    <h3>Slots</h3>
+    <div class="btnbar">
+      <button id="btnAddSlot">+ Slot</button>
+    </div>
+    <table id="slotsTable">
+      <thead>
+        <tr>
+          <th style="width:18%">id</th>
+          <th style="width:22%">label</th>
+          <th style="width:10%">req</th>
+          <th style="width:25%">unlockAfter</th>
+          <th style="width:15%">complete</th>
+          <th style="width:10%"></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <h3>Locaties</h3>
+    <div class="btnbar">
+      <button id="btnAddLoc">+ Locatie (zonder kaart)</button>
+    </div>
+    <table id="locsTable">
+      <thead>
+        <tr>
+          <th style="width:22%">id</th>
+          <th style="width:18%">slot</th>
+          <th style="width:20%">naam</th>
+          <th style="width:10%">rad</th>
+          <th style="width:20%">lat/lng</th>
+          <th style="width:10%"></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <h3>Controle</h3>
+    <div id="validationBox" class="note mini"></div>
+
+    <div class="mini" style="margin-top:10px; opacity:.7">
+      Tip: klik een locatie in de tabel om er naartoe te zoomen op de kaart.
+    </div>
+  </div>
+
+  <div class="right">
+    <div id="map"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // --------- Data model ----------
+  function defaultData(){
+    return {
+      meta: {
+        title: 'Nieuwe route',
+        subtitle: '',
+        version: '1.0'
+        // characters optioneel
+      },
+      settings: {
+        visibilityMode: 'nextOnly',
+        multiLocationSlotMode: 'all',
+        showOptionalSlots: true,
+        listShowFutureSlots: true,
+        mapShowFutureLocations: false
+      },
+      prestart: {
+        useLocationId: '',
+        meetingPoint: { lat: 51.220418, lng: 4.440854, label: 'Aan de voordeur' },
+        message: 'Nog niet aan het startpunt. Ga naar de startlocatie om te beginnen.',
+        maps: { label: 'Route naar startpunt' },
+        images: []
+      },
+      slots: [
+        { id:'start', label:'Start', required:true }
+      ],
+      locaties: []
+    };
+  }
+
+  var DATA = defaultData();
+
+  // --------- Map ----------
+  var map = L.map('map').setView([51.220418, 4.440854], 15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+
+  var markerLayer = L.layerGroup().addTo(map);
+  var meetingMarker = null;
+
+  // locationId -> {marker, circle}
+  var locRender = {};
+
+  var meetingPickMode = false;
+
+  map.on('click', function(e){
+    if(meetingPickMode){
+      meetingPickMode = false;
+      setMeetingPoint(e.latlng.lat, e.latlng.lng);
+      renderMeetingMarker();
+      return;
+    }
+    // add location by map click
+    addLocFromMap(e.latlng.lat, e.latlng.lng);
+  });
+
+  // --------- Helpers ----------
+  function byId(id){ return document.getElementById(id); }
+  function esc(s){
+    s = (s==null ? '' : String(s));
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function uniqueId(prefix, list, key){
+    var i=1, id;
+    do{
+      id = prefix + String(i).padStart(2,'0');
+      i++;
+    }while(existsIn(list, key, id));
+    return id;
+  }
+  function existsIn(list, key, value){
+    for(var i=0;i<list.length;i++){
+      if(list[i] && list[i][key] === value) return true;
+    }
+    return false;
+  }
+  function findLocById(id){
+    for(var i=0;i<DATA.locaties.length;i++){
+      if(DATA.locaties[i].id===id) return DATA.locaties[i];
+    }
+    return null;
+  }
+  function slotIds(){
+    var ids=[];
+    for(var i=0;i<DATA.slots.length;i++){
+      if(DATA.slots[i] && DATA.slots[i].id) ids.push(DATA.slots[i].id);
+    }
+    return ids;
+  }
+
+  // --------- UI bind ----------
+  function bindUI(){
+    byId('btnNew').addEventListener('click', function(){
+      DATA = defaultData();
+      syncUIFromData();
+      renderAll();
+    });
+
+    byId('btnExport').addEventListener('click', exportJson);
+    byId('btnImport').addEventListener('click', function(){
+      byId('fileImport').click();
+    });
+    byId('fileImport').addEventListener('change', importJsonFile);
+
+    // meta
+    byId('metaTitle').addEventListener('input', function(){ DATA.meta.title = this.value; });
+    byId('metaSubtitle').addEventListener('input', function(){ DATA.meta.subtitle = this.value; });
+    byId('metaVersion').addEventListener('input', function(){ DATA.meta.version = this.value; });
+
+    byId('metaCharactersEnabled').addEventListener('change', function(){
+      var enabled = !!this.checked;
+      byId('metaCharactersBox').style.display = enabled ? 'block' : 'none';
+      if(enabled){
+        if(!DATA.meta.characters) DATA.meta.characters = { enabled:true, source:'personages.json' };
+        DATA.meta.characters.enabled = true;
+      }else{
+        // We bewaren niets: bij export wordt het veld weggelaten (clean)
+        delete DATA.meta.characters;
+      }
+    });
+    byId('metaCharactersSource').addEventListener('input', function(){
+      if(!DATA.meta.characters) DATA.meta.characters = { enabled:true, source:'personages.json' };
+      DATA.meta.characters.source = this.value;
+    });
+
+    // settings
+    byId('setVisibilityMode').addEventListener('change', function(){ DATA.settings.visibilityMode = this.value; validateAndRender(); });
+    byId('setMultiLocSlotMode').addEventListener('change', function(){ DATA.settings.multiLocationSlotMode = this.value; validateAndRender(); });
+    byId('setShowOptionalSlots').addEventListener('change', function(){ DATA.settings.showOptionalSlots = !!this.checked; });
+    byId('setListShowFutureSlots').addEventListener('change', function(){ DATA.settings.listShowFutureSlots = !!this.checked; });
+    byId('setMapShowFutureLocations').addEventListener('change', function(){ DATA.settings.mapShowFutureLocations = !!this.checked; });
+
+    // prestart
+    byId('preUseLocationId').addEventListener('change', function(){ DATA.prestart.useLocationId = this.value; validateAndRender(); });
+    byId('preMeetingLabel').addEventListener('input', function(){ DATA.prestart.meetingPoint.label = this.value; renderMeetingMarker(); });
+    byId('preMeetingLat').addEventListener('input', function(){ DATA.prestart.meetingPoint.lat = parseFloat(this.value||0); renderMeetingMarker(); });
+    byId('preMeetingLng').addEventListener('input', function(){ DATA.prestart.meetingPoint.lng = parseFloat(this.value||0); renderMeetingMarker(); });
+    byId('preMessage').addEventListener('input', function(){ DATA.prestart.message = this.value; });
+    byId('preMapsLabel').addEventListener('input', function(){ DATA.prestart.maps.label = this.value; });
+
+    byId('btnSetMeetingPoint').addEventListener('click', function(){
+      meetingPickMode = true;
+      alert('Klik nu op de kaart om het meeting point te zetten.');
+    });
+
+    // slots
+    byId('btnAddSlot').addEventListener('click', function(){
+      var id = uniqueId('stop', DATA.slots, 'id');
+      DATA.slots.push({ id:id, label:id, required:true, unlockAfterSlot:'' });
+      renderSlotsTable();
+      renderLocsTable();
+      validateAndRender();
+    });
+
+    // locaties
+    byId('btnAddLoc').addEventListener('click', function(){
+      addLocFromMap(DATA.prestart.meetingPoint.lat, DATA.prestart.meetingPoint.lng);
+    });
+  }
+
+  function setMeetingPoint(lat,lng){
+    DATA.prestart.meetingPoint.lat = lat;
+    DATA.prestart.meetingPoint.lng = lng;
+    byId('preMeetingLat').value = lat;
+    byId('preMeetingLng').value = lng;
+  }
+
+  // --------- Location add/render ----------
+  function addLocFromMap(lat,lng){
+    var locId = prompt('Locatie id?', uniqueId('loc', DATA.locaties, 'id'));
+    if(!locId) return;
+    if(findLocById(locId)){
+      alert('Deze locatie-id bestaat al.');
+      return;
+    }
+
+    var sids = slotIds();
+    var slot = prompt('Slot id? (bv. start, stop01, end)', sids.length ? sids[0] : 'start');
+    if(!slot) slot = 'start';
+
+    var naam = prompt('Naam?', locId) || locId;
+
+    var loc = {
+      id: locId,
+      slot: slot,
+      naam: naam,
+      lat: lat,
+      lng: lng,
+      radius: 50,
+      images: [],
+      routeHint: '',
+      uitleg: { kort:'', uitgebreid:'' },
+      vragen: []
+    };
+    DATA.locaties.push(loc);
+
+    // default prestart.useLocationId if empty and slot==start
+    if(!DATA.prestart.useLocationId && slot === 'start'){
+      DATA.prestart.useLocationId = locId;
+    }
+
+    renderAll();
+  }
+
+  function renderMeetingMarker(){
+    var mp = DATA.prestart.meetingPoint;
+    if(!mp || mp.lat==null || mp.lng==null) return;
+    if(!meetingMarker){
+      meetingMarker = L.marker([mp.lat, mp.lng], { draggable:true });
+      meetingMarker.addTo(map);
+      meetingMarker.on('drag', function(ev){
+        var ll = ev.target.getLatLng();
+        setMeetingPoint(ll.lat, ll.lng);
+      });
+      meetingMarker.on('dragend', function(ev){
+        var ll = ev.target.getLatLng();
+        setMeetingPoint(ll.lat, ll.lng);
+      });
+    }
+    meetingMarker.setLatLng([mp.lat, mp.lng]);
+    var txt = mp.label ? mp.label : 'Meeting point';
+    meetingMarker.bindPopup('<b>'+esc(txt)+'</b>').closePopup();
+  }
+
+  function renderLocMarkers(){
+    markerLayer.clearLayers();
+    locRender = {};
+
+    for(var i=0;i<DATA.locaties.length;i++){
+      (function(){
+        var loc = DATA.locaties[i];
+        if(!loc || loc.lat==null || loc.lng==null) return;
+
+        var m = L.marker([loc.lat, loc.lng], { draggable:true });
+        m.addTo(markerLayer);
+
+        var c = L.circle([loc.lat, loc.lng], { radius: (loc.radius||50), weight:1, fillOpacity:0.08 });
+        c.addTo(markerLayer);
+
+        m.on('drag', function(ev){
+          var ll = ev.target.getLatLng();
+          loc.lat = ll.lat;
+          loc.lng = ll.lng;
+          c.setLatLng(ll);
+          renderLocsTable(); // refresh lat/lng display
+        });
+        m.on('dragend', function(ev){
+          var ll = ev.target.getLatLng();
+          loc.lat = ll.lat;
+          loc.lng = ll.lng;
+          c.setLatLng(ll);
+          validateAndRender();
+        });
+
+        m.on('click', function(){
+          openLocEditor(loc.id);
+        });
+
+        var popup = '<b>'+esc(loc.naam||loc.id)+'</b><br><span class="mini">'+esc(loc.id)+' · slot='+esc(loc.slot||'')+'</span>';
+        m.bindPopup(popup);
+
+        locRender[loc.id] = { marker:m, circle:c };
+      })();
+    }
+  }
+
+  // --------- Tables ----------
+  function renderSlotsTable(){
+    var tb = byId('slotsTable').querySelector('tbody');
+    var html = '';
+    var sids = slotIds();
+
+    for(var i=0;i<DATA.slots.length;i++){
+      var s = DATA.slots[i];
+      if(!s) continue;
+
+      html += '<tr>';
+      html += '<td><input data-i="'+i+'" data-k="id" class="slotInp" type="text" value="'+esc(s.id||'')+'"></td>';
+      html += '<td><input data-i="'+i+'" data-k="label" class="slotInp" type="text" value="'+esc(s.label||'')+'"></td>';
+      html += '<td style="text-align:center"><input data-i="'+i+'" data-k="required" class="slotChk" type="checkbox" '+(s.required?'checked':'')+'></td>';
+
+      // unlockAfterSlot dropdown
+      html += '<td><select data-i="'+i+'" data-k="unlockAfterSlot" class="slotSel">';
+      html += '<option value=""></option>';
+      for(var j=0;j<sids.length;j++){
+        var sid = sids[j];
+        var sel = (s.unlockAfterSlot===sid) ? 'selected' : '';
+        html += '<option value="'+esc(sid)+'" '+sel+'>'+esc(sid)+'</option>';
+      }
+      html += '</select></td>';
+
+      // completeMode
+      html += '<td><select data-i="'+i+'" data-k="completeMode" class="slotSel">';
+      var modes = ['', 'random', 'fixed'];
+      for(var k=0;k<modes.length;k++){
+        var mv = modes[k];
+        var sel2 = (s.completeMode===mv) ? 'selected' : '';
+        html += '<option value="'+esc(mv)+'" '+sel2+'>'+esc(mv)+'</option>';
+      }
+      html += '</select></td>';
+
+      html += '<td style="text-align:right"><span class="linklike" data-del-slot="'+i+'">verwijder</span></td>';
+      html += '</tr>';
+    }
+    tb.innerHTML = html;
+
+    // bind slot inputs
+    var inps = tb.querySelectorAll('.slotInp');
+    for(var a=0;a<inps.length;a++){
+      inps[a].addEventListener('input', function(){
+        var i = parseInt(this.getAttribute('data-i'),10);
+        var k = this.getAttribute('data-k');
+        DATA.slots[i][k] = this.value;
+        // if id changed: update dropdowns + loc slot dropdowns
+        renderSlotsTable();
+        renderLocsTable();
+        renderPrestartUseLocationDropdown();
+        validateAndRender();
+      });
+    }
+    var chks = tb.querySelectorAll('.slotChk');
+    for(var b=0;b<chks.length;b++){
+      chks[b].addEventListener('change', function(){
+        var i = parseInt(this.getAttribute('data-i'),10);
+        DATA.slots[i].required = !!this.checked;
+        validateAndRender();
+      });
+    }
+    var sels = tb.querySelectorAll('.slotSel');
+    for(var c2=0;c2<sels.length;c2++){
+      sels[c2].addEventListener('change', function(){
+        var i = parseInt(this.getAttribute('data-i'),10);
+        var k = this.getAttribute('data-k');
+        var v = this.value;
+        if(v==='') delete DATA.slots[i][k];
+        else DATA.slots[i][k] = v;
+        validateAndRender();
+      });
+    }
+
+    // delete slot
+    var dels = tb.querySelectorAll('[data-del-slot]');
+    for(var d=0;d<dels.length;d++){
+      dels[d].addEventListener('click', function(){
+        var idx = parseInt(this.getAttribute('data-del-slot'),10);
+        if(!confirm('Slot verwijderen? (locaties die ernaar verwijzen blijven bestaan)')) return;
+        DATA.slots.splice(idx,1);
+        renderAll();
+      });
+    }
+  }
+
+  function renderLocsTable(){
+    var tb = byId('locsTable').querySelector('tbody');
+    var html = '';
+    var sids = slotIds();
+
+    for(var i=0;i<DATA.locaties.length;i++){
+      var l = DATA.locaties[i];
+      if(!l) continue;
+
+      var latlng = (l.lat!=null && l.lng!=null) ? (l.lat.toFixed(6)+', '+l.lng.toFixed(6)) : '';
+      html += '<tr>';
+      html += '<td><input data-i="'+i+'" data-k="id" class="locInp" type="text" value="'+esc(l.id||'')+'"></td>';
+
+      html += '<td><select data-i="'+i+'" data-k="slot" class="locSel">';
+      html += '<option value=""></option>';
+      for(var j=0;j<sids.length;j++){
+        var sid = sids[j];
+        var sel = (l.slot===sid) ? 'selected' : '';
+        html += '<option value="'+esc(sid)+'" '+sel+'>'+esc(sid)+'</option>';
+      }
+      html += '</select></td>';
+
+      html += '<td><input data-i="'+i+'" data-k="naam" class="locInp" type="text" value="'+esc(l.naam||'')+'"></td>';
+      html += '<td><input data-i="'+i+'" data-k="radius" class="locNum" type="number" step="1" value="'+esc(l.radius||50)+'"></td>';
+
+      html += '<td class="mini"><span class="linklike" data-zoom="'+esc(l.id)+'">'+esc(latlng)+'</span></td>';
+      html += '<td style="text-align:right"><span class="linklike" data-edit="'+esc(l.id)+'">edit</span> · <span class="linklike" data-del-loc="'+i+'">verwijder</span></td>';
+      html += '</tr>';
+    }
+    tb.innerHTML = html;
+
+    var inps = tb.querySelectorAll('.locInp');
+    for(var a=0;a<inps.length;a++){
+      inps[a].addEventListener('input', function(){
+        var i = parseInt(this.getAttribute('data-i'),10);
+        var k = this.getAttribute('data-k');
+        DATA.locaties[i][k] = this.value;
+
+        // als id wijzigt: render markers opnieuw (mapping op id)
+        renderAll();
+      });
+    }
+    var nums = tb.querySelectorAll('.locNum');
+    for(var b=0;b<nums.length;b++){
+      nums[b].addEventListener('input', function(){
+        var i = parseInt(this.getAttribute('data-i'),10);
+        var k = this.getAttribute('data-k');
+        var v = parseFloat(this.value||0);
+        DATA.locaties[i][k] = v;
+
+        // update circle live
+        var loc = DATA.locaties[i];
+        var rr = locRender[loc.id];
+        if(rr && rr.circle) rr.circle.setRadius(v||0);
+
+        validateAndRender();
+      });
+    }
+    var sels = tb.querySelectorAll('.locSel');
+    for(var c=0;c<sels.length;c++){
+      sels[c].addEventListener('change', function(){
+        var i = parseInt(this.getAttribute('data-i'),10);
+        var k = this.getAttribute('data-k');
+        DATA.locaties[i][k] = this.value;
+        renderPrestartUseLocationDropdown();
+        validateAndRender();
+      });
+    }
+
+    var edits = tb.querySelectorAll('[data-edit]');
+    for(var e=0;e<edits.length;e++){
+      edits[e].addEventListener('click', function(){
+        openLocEditor(this.getAttribute('data-edit'));
+      });
+    }
+
+    var zooms = tb.querySelectorAll('[data-zoom]');
+    for(var z=0;z<zooms.length;z++){
+      zooms[z].addEventListener('click', function(){
+        zoomToLoc(this.getAttribute('data-zoom'));
+      });
+    }
+
+    var dels = tb.querySelectorAll('[data-del-loc]');
+    for(var d=0;d<dels.length;d++){
+      dels[d].addEventListener('click', function(){
+        var idx = parseInt(this.getAttribute('data-del-loc'),10);
+        if(!confirm('Locatie verwijderen?')) return;
+        DATA.locaties.splice(idx,1);
+        renderAll();
+      });
+    }
+  }
+
+  function zoomToLoc(locId){
+    var rr = locRender[locId];
+    if(rr && rr.marker){
+      map.setView(rr.marker.getLatLng(), Math.max(map.getZoom(), 16), { animate:true });
+      rr.marker.openPopup();
+    }
+  }
+
+  // Minimal editor (prompt-based v1)
+  function openLocEditor(locId){
+    var loc = findLocById(locId);
+    if(!loc) return;
+
+    var rh = prompt('routeHint', loc.routeHint || '');
+    if(rh != null) loc.routeHint = rh;
+
+    var kort = prompt('uitleg.kort', (loc.uitleg && loc.uitleg.kort) ? loc.uitleg.kort : '');
+    if(!loc.uitleg) loc.uitleg = { kort:'', uitgebreid:'' };
+    if(kort != null) loc.uitleg.kort = kort;
+
+    var uit = prompt('uitleg.uitgebreid', (loc.uitleg && loc.uitleg.uitgebreid) ? loc.uitleg.uitgebreid : '');
+    if(uit != null) loc.uitleg.uitgebreid = uit;
+
+    // vragen: quick edit as newline list
+    var qtxt = (loc.vragen && loc.vragen.length) ? loc.vragen.join('\n') : '';
+    var nq = prompt('vragen (1 per lijn)', qtxt);
+    if(nq != null){
+      var lines = nq.split('\n');
+      var out=[];
+      for(var i=0;i<lines.length;i++){
+        var t = lines[i].trim();
+        if(t) out.push(t);
+      }
+      loc.vragen = out;
+    }
+
+    renderAll();
+  }
+
+  // --------- Prestart dropdown ----------
+  function renderPrestartUseLocationDropdown(){
+    var sel = byId('preUseLocationId');
+    var cur = DATA.prestart.useLocationId || '';
+    var html = '<option value=""></option>';
+    for(var i=0;i<DATA.locaties.length;i++){
+      var l = DATA.locaties[i];
+      if(!l || !l.id) continue;
+      var label = l.id + (l.naam ? ' — ' + l.naam : '');
+      var s = (cur===l.id) ? 'selected' : '';
+      html += '<option value="'+esc(l.id)+'" '+s+'>'+esc(label)+'</option>';
+    }
+    sel.innerHTML = html;
+  }
+
+  // --------- Validation ----------
+  function validate(){
+    var issues = { errors:[], warns:[], oks:[] };
+
+    // dup slot ids
+    var seenS = {};
+    for(var i=0;i<DATA.slots.length;i++){
+      var s = DATA.slots[i];
+      if(!s || !s.id) continue;
+      if(seenS[s.id]) issues.errors.push('Dubbele slot id: '+s.id);
+      seenS[s.id]=true;
+    }
+
+    // dup loc ids + required fields
+    var seenL = {};
+    for(var j=0;j<DATA.locaties.length;j++){
+      var l = DATA.locaties[j];
+      if(!l || !l.id) continue;
+      if(seenL[l.id]) issues.errors.push('Dubbele locatie id: '+l.id);
+      seenL[l.id]=true;
+
+      if(l.lat==null || l.lng==null) issues.errors.push('Locatie zonder lat/lng: '+l.id);
+      if(l.slot && !seenS[l.slot]) issues.errors.push('Locatie '+l.id+' verwijst naar onbekend slot: '+l.slot);
+      if(l.radius!=null && (l.radius < 10)) issues.warns.push('Radius heel klein (<10m) bij '+l.id);
+      if(l.radius!=null && (l.radius > 1000)) issues.warns.push('Radius heel groot (>1000m) bij '+l.id);
+    }
+
+    // unlockAfterSlot references
+    for(var k=0;k<DATA.slots.length;k++){
+      var ss = DATA.slots[k];
+      if(ss && ss.unlockAfterSlot && !seenS[ss.unlockAfterSlot]){
+        issues.errors.push('Slot '+(ss.id||'?')+' unlockAfterSlot bestaat niet: '+ss.unlockAfterSlot);
+      }
+    }
+
+    // required slot without locations
+    var locCountBySlot = {};
+    for(var a=0;a<DATA.locaties.length;a++){
+      var ll = DATA.locaties[a];
+      if(!ll || !ll.slot) continue;
+      locCountBySlot[ll.slot] = (locCountBySlot[ll.slot]||0) + 1;
+    }
+    for(var b=0;b<DATA.slots.length;b++){
+      var rs = DATA.slots[b];
+      if(!rs || !rs.id) continue;
+      if(rs.required && (!locCountBySlot[rs.id])){
+        issues.warns.push('Required slot zonder locaties: '+rs.id);
+      }
+      if(rs.completeMode==='random' && (locCountBySlot[rs.id]||0) <= 1){
+        issues.warns.push('completeMode=random maar slechts 1 locatie in '+rs.id);
+      }
+    }
+
+    // prestart.useLocationId exists?
+    if(DATA.prestart.useLocationId){
+      if(!seenL[DATA.prestart.useLocationId]){
+        issues.errors.push('prestart.useLocationId bestaat niet: '+DATA.prestart.useLocationId);
+      }
+    }
+
+    if(issues.errors.length===0) issues.oks.push('Geen fouten gevonden.');
+    return issues;
+  }
+
+  function renderValidation(){
+    var v = validate();
+    var box = byId('validationBox');
+    var html = '';
+
+    if(v.errors.length){
+      html += '<div class="err"><b>Fouten</b><ul>';
+      for(var i=0;i<v.errors.length;i++) html += '<li>'+esc(v.errors[i])+'</li>';
+      html += '</ul></div>';
+    }
+    if(v.warns.length){
+      html += '<div class="warn"><b>Waarschuwingen</b><ul>';
+      for(var j=0;j<v.warns.length;j++) html += '<li>'+esc(v.warns[j])+'</li>';
+      html += '</ul></div>';
+    }
+    if(v.oks.length){
+      html += '<div class="ok"><b>OK</b><ul>';
+      for(var k=0;k<v.oks.length;k++) html += '<li>'+esc(v.oks[k])+'</li>';
+      html += '</ul></div>';
+    }
+    box.innerHTML = html || '<span class="mini">Nog niets om te valideren.</span>';
+  }
+
+  function validateAndRender(){
+    renderValidation();
+  }
+
+  // --------- Import / Export ----------
+  function exportJson(){
+    // Clone and keep output clean
+    var out = JSON.parse(JSON.stringify(DATA));
+
+    // Characters: enkel mee als checkbox aan staat (DATA.meta.characters bestaat)
+    if(!out.meta || !out.meta.characters){
+      if(out.meta && out.meta.characters) delete out.meta.characters;
+    }
+
+    // Strip empty unlockAfterSlot/completeMode for neatness
+    for(var i=0;i<out.slots.length;i++){
+      var s = out.slots[i];
+      if(!s) continue;
+      if(!s.unlockAfterSlot) delete s.unlockAfterSlot;
+      if(!s.completeMode) delete s.completeMode;
+    }
+
+    // Ensure prestart.maps exists
+    if(out.prestart && !out.prestart.maps) out.prestart.maps = { label:'' };
+
+    var json = JSON.stringify(out, null, 2);
+    var blob = new Blob([json], { type:'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (out.meta && out.meta.title ? out.meta.title : 'route') + '.json';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){
+      URL.revokeObjectURL(a.href);
+      document.body.removeChild(a);
+    }, 250);
+  }
+
+  function importJsonFile(ev){
+    var f = ev.target.files && ev.target.files[0];
+    if(!f) return;
+    var r = new FileReader();
+    r.onload = function(){
+      try{
+        var obj = JSON.parse(r.result);
+        // basic sanity
+        if(!obj || typeof obj !== 'object') throw new Error('Geen object');
+        if(!obj.meta) obj.meta = { title:'(import)', subtitle:'', version:'1.0' };
+        if(!obj.settings) obj.settings = defaultData().settings;
+        if(!obj.prestart) obj.prestart = defaultData().prestart;
+        if(!obj.slots) obj.slots = [];
+        if(!obj.locaties) obj.locaties = [];
+
+        DATA = obj;
+        syncUIFromData();
+        renderAll();
+      }catch(e){
+        alert('Import mislukt: ' + (e && e.message ? e.message : e));
+      }finally{
+        ev.target.value = '';
+      }
+    };
+    r.readAsText(f);
+  }
+
+  // --------- Sync UI ----------
+  function syncUIFromData(){
+    // meta
+    byId('metaTitle').value = DATA.meta.title || '';
+    byId('metaSubtitle').value = DATA.meta.subtitle || '';
+    byId('metaVersion').value = DATA.meta.version || '1.0';
+
+    var hasChars = !!(DATA.meta && DATA.meta.characters);
+    byId('metaCharactersEnabled').checked = hasChars;
+    byId('metaCharactersBox').style.display = hasChars ? 'block' : 'none';
+    byId('metaCharactersSource').value = hasChars ? (DATA.meta.characters.source || 'personages.json') : 'personages.json';
+
+    // settings
+    byId('setVisibilityMode').value = DATA.settings.visibilityMode || 'nextOnly';
+    byId('setMultiLocSlotMode').value = DATA.settings.multiLocationSlotMode || 'all';
+    byId('setShowOptionalSlots').checked = !!DATA.settings.showOptionalSlots;
+    byId('setListShowFutureSlots').checked = !!DATA.settings.listShowFutureSlots;
+    byId('setMapShowFutureLocations').checked = !!DATA.settings.mapShowFutureLocations;
+
+    // prestart
+    byId('preMeetingLabel').value = (DATA.prestart.meetingPoint && DATA.prestart.meetingPoint.label) ? DATA.prestart.meetingPoint.label : '';
+    byId('preMeetingLat').value = (DATA.prestart.meetingPoint && DATA.prestart.meetingPoint.lat!=null) ? DATA.prestart.meetingPoint.lat : '';
+    byId('preMeetingLng').value = (DATA.prestart.meetingPoint && DATA.prestart.meetingPoint.lng!=null) ? DATA.prestart.meetingPoint.lng : '';
+    byId('preMessage').value = DATA.prestart.message || '';
+    byId('preMapsLabel').value = (DATA.prestart.maps && DATA.prestart.maps.label) ? DATA.prestart.maps.label : '';
+  }
+
+  // --------- Render all ----------
+  function renderAll(){
+    renderMeetingMarker();
+    renderSlotsTable();
+    renderLocsTable();
+    renderLocMarkers();
+    renderPrestartUseLocationDropdown();
+
+    // ensure prestart.useLocationId selected
+    if(DATA.prestart && DATA.prestart.useLocationId){
+      byId('preUseLocationId').value = DATA.prestart.useLocationId;
+    }
+
+    validateAndRender();
+  }
+
+  // --------- Init ----------
+  bindUI();
+  syncUIFromData();
+  renderAll();
+
+})();
+</script>
+</body>
+</html>
