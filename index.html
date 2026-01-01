@@ -51,19 +51,31 @@
 }
 
 .locLabelIcon { background: transparent; border: none; }
+.leaflet-marker-icon.locLabelIcon{
+  background: transparent;
+  border: none;
+  overflow: visible !important;   /* ✅ anders knipt Leaflet soms toch */
+}
+
 .locLabelBubble{
+  display: inline-block;          /* ✅ achtergrond rond volledige tekst */
   transform: translate(-58%, -38px);
+
   padding: 2px 6px;
   border-radius: 10px;
   border: 1px solid #cfcfcf;
-  background: rgba(255,255,255,.92);
+  background: rgba(255,255,255,.85);
   font-size: 11px;
   white-space: nowrap;
-  /* leesbaarheid: witte halo rond letters */
+
+  /* Witte halo rond letters -> leesbaar op kaart */
   text-shadow:
-    0 0 2px rgba(255,255,255,0.95),
-    0 0 4px rgba(255,255,255,0.95),
-    0 1px 0 rgba(255,255,255,0.95);
+    -1px -1px 0 rgba(255,255,255,.95),
+     1px -1px 0 rgba(255,255,255,.95),
+    -1px  1px 0 rgba(255,255,255,.95),
+     1px  1px 0 rgba(255,255,255,.95),
+     0px  0px 4px rgba(255,255,255,.95);
+
   box-shadow: 0 1px 4px rgba(0,0,0,.12);
 }
 .mapLegend{
@@ -809,7 +821,8 @@ function makeLabeledIcon(id, slot){
   return L.divIcon({
     className: 'locLabelIcon',
     html: '<div class="locLabelBubble">'+esc(txt)+'</div>',
-    iconSize: [1,1]
+    iconSize: [0, 0],     // ✅ geen clipping box
+    iconAnchor: [0, 0]
   });
 }
 
@@ -830,13 +843,28 @@ function makeLabeledIcon(id, slot){
         m.addTo(markerLayer);
 
       var req = isSlotRequired(loc.slot);
+      var req = isSlotRequired(loc.slot);
 
-      // Required: stevige lijn, Optional: gestippeld + lichter
       var circleOpts = req
-        ? { radius:(loc.radius||50), weight:2, fillOpacity:0.10 }
-        : { radius:(loc.radius||50), weight:2, dashArray:'6 6', fillOpacity:0.06, opacity:0.6 };
+        ? {
+            radius: (loc.radius || 50),
+            weight: 2,
+            opacity: 0.9,
+            fillOpacity: 0.10
+          }
+        : {
+            radius: (loc.radius || 50),
+            weight: 2,
+            color: '#666',          // ✅ andere kleur voor optioneel
+            fillColor: '#999',
+            opacity: 0.75,
+            fillOpacity: 0.05,
+            dashArray: '10 10',     // ✅ duidelijker patroon
+            lineCap: 'butt'         // ✅ dashes zien er echt uit als dashes
+          };
 
       var c = L.circle([loc.lat, loc.lng], circleOpts).addTo(markerLayer);
+
 
 
         m.on('drag', function(ev){
@@ -1340,6 +1368,11 @@ inps[a].addEventListener('blur', function(){
         DATA = obj;
         syncUIFromData();
         renderAll();
+        // Force Leaflet to repaint (dashArray sometimes appears only after next redraw)
+        setTimeout(function(){
+          try { map.invalidateSize(true); } catch(e){}
+          try { renderLocMarkers(); } catch(e){}
+        }, 50);
         fitMapToData();
 
       }catch(e){
