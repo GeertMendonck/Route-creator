@@ -52,14 +52,60 @@
 
 .locLabelIcon { background: transparent; border: none; }
 .locLabelBubble{
-  transform: translate(-50%, -38px);
+  transform: translate(-58%, -38px);
   padding: 2px 6px;
   border-radius: 10px;
   border: 1px solid #cfcfcf;
   background: rgba(255,255,255,.92);
   font-size: 11px;
   white-space: nowrap;
+  /* leesbaarheid: witte halo rond letters */
+  text-shadow:
+    0 0 2px rgba(255,255,255,0.95),
+    0 0 4px rgba(255,255,255,0.95),
+    0 1px 0 rgba(255,255,255,0.95);
   box-shadow: 0 1px 4px rgba(0,0,0,.12);
+}
+.mapLegend{
+  background: rgba(255,255,255,.92);
+  border: 1px solid #d8d8d8;
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.12);
+}
+
+.mapLegend .lgTitle{
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.mapLegend .lgRow{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin: 4px 0;
+  white-space: nowrap;
+}
+
+.mapLegend .lgSwatch{
+  width: 26px;
+  height: 10px;
+  border-radius: 999px;
+  display:inline-block;
+  background: rgba(0,0,0,.06);
+}
+
+/* match je cirkelstijl */
+.mapLegend .lgReq{
+  border: 2px solid rgba(0,0,0,.55);
+  background: rgba(0,0,0,.10);
+}
+
+.mapLegend .lgOpt{
+  border: 2px dashed rgba(0,0,0,.45);
+  background: rgba(0,0,0,.06);
+  opacity: .75;
 }
 
   </style>
@@ -253,6 +299,20 @@
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap'
   }).addTo(map);
+// --- Legend (required vs optional radius) ---
+var legendCtrl = L.control({ position: 'topright' });
+legendCtrl.onAdd = function(){
+  var div = L.DomUtil.create('div', 'mapLegend');
+  div.innerHTML =
+    '<div class="lgTitle">Legenda</div>' +
+    '<div class="lgRow"><span class="lgSwatch lgReq"></span> Vereist (required)</div>' +
+    '<div class="lgRow"><span class="lgSwatch lgOpt"></span> Optioneel</div>';
+  // voorkomen dat scroll/drag op de kaart “meepakt” als je op de legenda klikt
+  L.DomEvent.disableClickPropagation(div);
+  L.DomEvent.disableScrollPropagation(div);
+  return div;
+};
+legendCtrl.addTo(map);
 
   var markerLayer = L.layerGroup().addTo(map);
   var meetingMarker = null;
@@ -305,6 +365,14 @@
       if(DATA.slots[i] && DATA.slots[i].id) ids.push(DATA.slots[i].id);
     }
     return ids;
+  }
+  function isSlotRequired(slotId){
+    if(!slotId || !DATA || !DATA.slots) return false;
+    for(var i=0;i<DATA.slots.length;i++){
+      var s = DATA.slots[i];
+      if(s && s.id === slotId) return !!s.required;
+    }
+    return false;
   }
 
   // --------- UI bind ----------
@@ -761,8 +829,15 @@ function makeLabeledIcon(id, slot){
 
         m.addTo(markerLayer);
 
-        var c = L.circle([loc.lat, loc.lng], { radius: (loc.radius||50), weight:1, fillOpacity:0.08 });
-        c.addTo(markerLayer);
+      var req = isSlotRequired(loc.slot);
+
+      // Required: stevige lijn, Optional: gestippeld + lichter
+      var circleOpts = req
+        ? { radius:(loc.radius||50), weight:2, fillOpacity:0.10 }
+        : { radius:(loc.radius||50), weight:2, dashArray:'6 6', fillOpacity:0.06, opacity:0.6 };
+
+      var c = L.circle([loc.lat, loc.lng], circleOpts).addTo(markerLayer);
+
 
         m.on('drag', function(ev){
           var ll = ev.target.getLatLng();
@@ -867,6 +942,7 @@ inps[a].addEventListener('blur', function(){
       chks[b].addEventListener('change', function(){
         var i = parseInt(this.getAttribute('data-i'),10);
         DATA.slots[i].required = !!this.checked;
+        renderLocMarkers();   // cirkels opnieuw tekenen met juiste stijl
         validateAndRender();
       });
     }
