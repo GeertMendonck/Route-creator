@@ -567,6 +567,68 @@ function drawRouteArrows(){
     addArrowAt(arrowPos, ang, toRequired).addTo(routeLayer);
 
   }
+  
+}
+function drawRouteArrows(){
+  routeLayer.clearLayers();
+  if(!showRouteArrows) return;
+
+  var bySlot = getLocationsBySlot();
+
+  for(var i=0;i<DATA.slots.length;i++){
+    var s = DATA.slots[i];
+    if(!s || !s.id || !s.unlockAfterSlot) continue;
+
+    var fromId = s.unlockAfterSlot;
+    var toId = s.id;
+
+    var fromPts = bySlot[fromId] || [];
+    var toPts = bySlot[toId] || [];
+
+    if(!fromPts.length || !toPts.length) continue;
+
+    var toRequired = isSlotRequired(toId);
+
+    var lineOpts = toRequired
+      ? { weight: 2, opacity: 0.65 }
+      : { weight: 2, opacity: 0.45, dashArray: '8 10', lineCap: 'butt' };
+
+    // teken pijlen voor elke combinatie from -> to
+    for(var a=0;a<fromPts.length;a++){
+      for(var b=0;b<toPts.length;b++){
+        var from = fromPts[a];
+        var to = toPts[b];
+
+        // Lijn
+        L.polyline([[from.lat, from.lng],[to.lat, to.lng]], lineOpts)
+          .addTo(routeLayer);
+
+        // Pijlpositie op 85% van de lijn (richting "to")
+        var t = 0.85;
+        var arrowPos = {
+          lat: from.lat + (to.lat - from.lat) * t,
+          lng: from.lng + (to.lng - from.lng) * t
+        };
+
+        // Rotatie: triangle wijst standaard omhoog, dus +90°
+        var ang = bearingDeg(from, to) + 90;
+        addArrowAt(arrowPos, ang, toRequired).addTo(routeLayer);
+      }
+    }
+  }
+}
+
+function getLocationsBySlot(){
+  var mapBySlot = {};
+  for(var i=0;i<DATA.locaties.length;i++){
+    var l = DATA.locaties[i];
+    if(!l || !l.slot) continue;
+    if(l.lat == null || l.lng == null) continue;
+
+    if(!mapBySlot[l.slot]) mapBySlot[l.slot] = [];
+    mapBySlot[l.slot].push({ lat:l.lat, lng:l.lng, id:l.id });
+  }
+  return mapBySlot;
 }
 
   // --------- UI bind ----------
@@ -1575,10 +1637,7 @@ inps[a].addEventListener('blur', function(){
         syncUIFromData();
         renderAll();
         // Force Leaflet to repaint (dashArray sometimes appears only after next redraw)
-        setTimeout(function(){
-          try { map.invalidateSize(true); } catch(e){}
-          try { renderLocMarkers(); } catch(e){}
-        }, 50);
+
               setTimeout(function(){
         try { map.invalidateSize(true); } catch(e){}
         try { renderLocMarkers(); } catch(e){}
