@@ -139,6 +139,23 @@
   background: rgba(0,0,0,.05);
   opacity: .8;
 }
+.mapLegend .lgActions{
+  margin-top:8px;
+  padding-top:8px;
+  border-top:1px solid #e5e5e5;
+}
+.mapLegend button{
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid #d0d0d0;
+  background: rgba(255,255,255,.95);
+  cursor: pointer;
+  font-weight: 700;
+}
+.mapLegend button:hover{
+  background: #fff;
+}
 
 .slotBadge{
   display:inline-block;
@@ -152,13 +169,13 @@
   line-height:1.4;
 }
 
-.arrowIcon{
+/* .arrowIcon{
   width:0; height:0;
   border-left:7px solid transparent;
   border-right:7px solid transparent;
-  border-top:12px solid rgba(0,0,0,.55); /* pijl-kleur */
+  border-top:12px solid rgba(0,0,0,.55); /* pijl-kleur 
   filter: drop-shadow(0 1px 2px rgba(255,255,255,.9));
-}
+} */
 .mapLegend .lgToggle{
   display:flex;
   align-items:center;
@@ -386,6 +403,10 @@ div.innerHTML =
   '  <div class="lgRow"><span class="lgSwatch lgArrowReq"></span> Route naar vereist</div>' +
   '  <div class="lgRow"><span class="lgSwatch lgArrowOpt"></span> Route naar optioneel</div>' +
   '</div>';
+  div.innerHTML +=
+  '<div class="lgActions">' +
+  '  <button id="btnFitRoute" type="button">📍 Centreer op route</button>' +
+  '</div>';
 
 
   // voorkomen dat scroll/drag op de kaart “meepakt” als je op de legenda klikt
@@ -395,6 +416,13 @@ div.innerHTML =
 };
 legendCtrl.addTo(map);
 setTimeout(function(){
+  var b = document.getElementById('btnFitRoute');
+if(b){
+  b.addEventListener('click', function(){
+    fitMapToData();
+  });
+}
+
   var cb = document.getElementById('toggleRouteArrows');
   if(cb){
     cb.addEventListener('change', function(){
@@ -505,16 +533,16 @@ function getSlotCenters(){
   return centers;
 }
 
-function addArrowAt(latlng, angleDeg, isRequired){
-  var op = isRequired ? 0.75 : 0.45;
-  var icon = L.divIcon({
-    className: '',
-    html:
-      '<div class="arrowIcon" style="opacity:'+op+';transform: rotate('+angleDeg+'deg)"></div>',
-    iconSize: [0,0]
-  });
-  return L.marker(latlng, { icon: icon, interactive:false });
-}
+// function addArrowAt(latlng, angleDeg, isRequired){
+//   var op = isRequired ? 0.75 : 0.45;
+//   var icon = L.divIcon({
+//     className: '',
+//     html:
+//       '<div class="arrowIcon" style="opacity:'+op+';transform: rotate('+angleDeg+'deg)"></div>',
+//     iconSize: [0,0]
+//   });
+//   return L.marker(latlng, { icon: icon, interactive:false });
+// }
 
 
 function bearingDeg(from, to){
@@ -557,14 +585,14 @@ function drawRouteArrows(){
 
     // pijl net voor het eindpunt (zodat het niet exact op de cirkelrand zit)
     var t = 0.85;
-    var arrowPos = {
-      lat: from.lat + (to.lat - from.lat) * t,
-      lng: from.lng + (to.lng - from.lng) * t
-    };
+    // var arrowPos = {
+    //   lat: from.lat + (to.lat - from.lat) * t,
+    //   lng: from.lng + (to.lng - from.lng) * t
+    // };
 
-    // rotatie: triangle wijst standaard "omhoog" (border-top), dus +90° verschuiving
-    var ang = bearingDeg(from, to) + 90;
-    addArrowAt(arrowPos, ang, toRequired).addTo(routeLayer);
+    // // rotatie: triangle wijst standaard "omhoog" (border-top), dus +90° verschuiving
+    // var ang = bearingDeg(from, to) + 90;
+    // addArrowAt(arrowPos, ang, toRequired).addTo(routeLayer);
 
   }
   
@@ -612,7 +640,7 @@ function drawRouteArrows(){
 
         // Rotatie: triangle wijst standaard omhoog, dus +90°
         var ang = bearingDeg(from, to) + 90;
-        addArrowAt(arrowPos, ang, toRequired).addTo(routeLayer);
+       // addArrowAt(arrowPos, ang, toRequired).addTo(routeLayer);
       }
     }
   }
