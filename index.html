@@ -134,11 +134,11 @@
 .mapLegend .swLine{
   width:28px;
   height:0;
-  border-top:3px solid rgba(0,0,0,.6);
+  border-top:3px solid rgba(42,129,255,.8);
   flex:0 0 auto;
 }
 .mapLegend .swLine.opt{
-  border-top-style:dashed;
+  border-top:3px solid rgba(0,0,0,.6);
   opacity:.8;
 }
 
@@ -379,7 +379,17 @@
 var legendCtrl = L.control({ position: 'topright' });
 legendCtrl.onAdd = function(){
   var div = L.DomUtil.create('div', 'mapLegend');
+ 
 div.innerHTML =
+'<div class="lgTitle" id="legendTitle" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px">' +
+  '  <span>Legenda</span>' +
+  '  <span id="legendChevron" style="opacity:.75">▾</span>' +
+  '</div>' +
+  '<div id="legendBody">' +
+     '<div class="lgToggle" style="margin-top:8px">' +
+  '  <input id="toggleLabels" type="checkbox" checked>' +
+  '  <label for="toggleLabels">Toon labels</label>' +
+  '</div>';
   '<div class="lgTitle">Legenda</div>' +
 
   '<div class="lgRow"><span class="swCircle swStart"></span> Start</div>' +
@@ -404,7 +414,7 @@ div.innerHTML =
   '<div class="lgActions">' +
   '  <button id="btnFitRoute" type="button">📍 Centreer op route</button>' +
   '</div>';
-
+'</div>';
 
   // voorkomen dat scroll/drag op de kaart “meepakt” als je op de legenda klikt
   L.DomEvent.disableClickPropagation(div);
@@ -413,6 +423,28 @@ div.innerHTML =
 };
 legendCtrl.addTo(map);
 setTimeout(function(){
+  var title = document.getElementById('legendTitle');
+  var body  = document.getElementById('legendBody');
+  var chev  = document.getElementById('legendChevron');
+
+  if(title && body){
+    title.addEventListener('click', function(){
+      var collapsed = body.style.display === 'none';
+      body.style.display = collapsed ? 'block' : 'none';
+      if(chev) chev.textContent = collapsed ? '▾' : '▸';
+    });
+  }
+}, 0);
+var cbLab = document.getElementById('toggleLabels');
+if(cbLab){
+  cbLab.checked = !!showLocLabels;
+  cbLab.addEventListener('change', function(){
+    showLocLabels = !!cbLab.checked;
+    renderLocMarkers();
+  });
+}
+
+setTimeout(function(){
   var b = document.getElementById('btnFitRoute');
 if(b){
   b.addEventListener('click', function(){
@@ -420,18 +452,22 @@ if(b){
   });
 }
 
-  var cb = document.getElementById('toggleRouteArrows');
-  if(cb){
-    cb.addEventListener('change', function(){
-      showRouteArrows = !!cb.checked;
-      drawRouteArrows();
-        var details = document.getElementById('arrowLegendDetails');
-  if(details){
-    details.style.display = showRouteArrows ? 'block' : 'none';
-  }
-    });
-  }
-}, 0);
+var cb = document.getElementById('toggleRouteArrows');
+if(cb){
+  cb.addEventListener('change', function(){
+    showRouteArrows = !!cb.checked;
+
+    // route-lijnen (her)tekenen
+    drawRouteArrows();
+
+    // extra legenda-uitleg tonen/verbergen
+    var details = document.getElementById('arrowLegendDetails');
+    if(details){
+      details.style.display = showRouteArrows ? 'block' : 'none';
+    }
+  });
+}
+
 
   var markerLayer = L.layerGroup().addTo(map);
   var routeLayer = L.layerGroup().addTo(map);
@@ -1125,20 +1161,20 @@ function makeLabeledIcon(id, slot, slotCounts){
         var loc = DATA.locaties[i];
         if(!loc || loc.lat==null || loc.lng==null) return;
 
-        var m = L.marker([loc.lat, loc.lng], {
-        draggable:true,
-        icon: makeLabeledIcon(loc.id, loc.slot, slotCounts)
-      });
+      var markerOpts = { draggable:true };
+
+        if(showLocLabels){
+          markerOpts.icon = makeLabeledIcon(loc.id, loc.slot, slotCounts);
+          // als labels aan staan, wil je meestal geen default “pin”
+        }
+
+var m = L.marker([loc.lat, loc.lng], markerOpts);
 
         m.addTo(markerLayer);
 
 var req = isSlotRequired(loc.slot);
 var multi = (loc.slot && slotCounts[loc.slot] > 1);
 
-// kleuren
-var COLOR_REQ_SINGLE = '#2A81FF';  // blauw (Leaflet-achtig)
-var COLOR_MULTI = '#7B4CFF';       // paars (varianten)
-var COLOR_OPT = '#666';            // grijs
 
 var circleOpts;
 
@@ -1299,17 +1335,23 @@ inps[a].addEventListener('blur', function(){
         validateAndRender();
       });
     }
-    var sels = tb.querySelectorAll('.slotSel');
-    for(var c2=0;c2<sels.length;c2++){
-      sels[c2].addEventListener('change', function(){
-        var i = parseInt(this.getAttribute('data-i'),10);
-        var k = this.getAttribute('data-k');
-        var v = this.value;
-        if(v==='') delete DATA.slots[i][k];
-        else DATA.slots[i][k] = v;
-        validateAndRender();
-      });
-    }
+   var sels = tb.querySelectorAll('.slotSel');
+for(var c2=0;c2<sels.length;c2++){
+  sels[c2].addEventListener('change', function(){
+    var i = parseInt(this.getAttribute('data-i'),10);
+    var k = this.getAttribute('data-k');
+    var v = this.value;
+
+    if(v==='') delete DATA.slots[i][k];
+    else DATA.slots[i][k] = v;
+
+    // ✅ kaart meteen bijwerken
+    drawRouteArrows();
+
+    validateAndRender();
+  });
+}
+
 
     // delete slot
     var dels = tb.querySelectorAll('[data-del-slot]');
