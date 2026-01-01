@@ -12,7 +12,7 @@
   <style>
     body{ margin:0; font-family:system-ui,Segoe UI,Roboto,Arial; }
     .wrap{ display:flex; height:100vh; }
-    .left{ width:420px; min-width:320px; max-width:520px; overflow:auto; border-right:1px solid #ddd; padding:12px; box-sizing:border-box; }
+    .left{ width:560px; min-width:320px; max-width:760px; overflow:auto; border-right:1px solid #ddd; padding:12px; box-sizing:border-box; }
     .right{ flex:1; position:relative; }
     #map{ position:absolute; inset:0; }
     h2{ margin:6px 0 10px; font-size:18px; }
@@ -43,6 +43,12 @@
     .split{ display:flex; gap:8px; align-items:center; }
     .split input[type="checkbox"]{ transform:scale(1.1); }
     .linklike{ color:#0b63ce; cursor:pointer; text-decoration:underline; }
+  .left{
+  width:560px;
+  max-width:760px;
+  resize: horizontal;
+  overflow:auto;
+}
   </style>
 </head>
 
