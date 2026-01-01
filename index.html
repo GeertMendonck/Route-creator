@@ -109,16 +109,39 @@
 }
 
 /* match je cirkelstijl */
-.mapLegend .lgReq{
-  border: 2px solid rgba(0,0,0,.55);
-  background: rgba(0,0,0,.10);
+.mapLegend .lgReqSingle{
+  border: 3px solid #2A81FF;
+  background: rgba(42,129,255,.10);
 }
 
-.mapLegend .lgOpt{
-  border: 2px dashed rgba(0,0,0,.45);
-  background: rgba(0,0,0,.06);
-  opacity: .75;
+.mapLegend .lgReqMulti{
+  border: 3px solid #7B4CFF;
+  background: rgba(123,76,255,.10);
 }
+
+.mapLegend .lgOptSingle{
+  border: 3px dashed #666;
+  background: rgba(0,0,0,.06);
+  opacity: .85;
+}
+
+.mapLegend .lgOptMulti{
+  border: 3px dashed #7B4CFF;
+  background: rgba(123,76,255,.06);
+  opacity: .9;
+}
+.slotBadge{
+  display:inline-block;
+  margin-left:6px;
+  padding:0 6px;
+  font-size:11px;
+  border-radius:999px;
+  background:#7B4CFF;
+  color:#fff;
+  font-weight:700;
+  line-height:1.4;
+}
+
 
   </style>
 </head>
@@ -315,10 +338,12 @@
 var legendCtrl = L.control({ position: 'topright' });
 legendCtrl.onAdd = function(){
   var div = L.DomUtil.create('div', 'mapLegend');
-  div.innerHTML =
-    '<div class="lgTitle">Legenda</div>' +
-    '<div class="lgRow"><span class="lgSwatch lgReq"></span> Vereist (required)</div>' +
-    '<div class="lgRow"><span class="lgSwatch lgOpt"></span> Optioneel</div>';
+div.innerHTML =
+  '<div class="lgTitle">Legenda</div>' +
+  '<div class="lgRow"><span class="lgSwatch lgReqSingle"></span> Vereist</div>' +
+  '<div class="lgRow"><span class="lgSwatch lgReqMulti"></span> Vereist (meerdere locaties)</div>' +
+  '<div class="lgRow"><span class="lgSwatch lgOptSingle"></span> Optioneel</div>' +
+  '<div class="lgRow"><span class="lgSwatch lgOptMulti"></span> Optioneel (meerdere locaties)</div>';
   // voorkomen dat scroll/drag op de kaart “meepakt” als je op de legenda klikt
   L.DomEvent.disableClickPropagation(div);
   L.DomEvent.disableScrollPropagation(div);
@@ -386,6 +411,16 @@ legendCtrl.addTo(map);
     }
     return false;
   }
+function getSlotLocationCounts(){
+  var counts = {};
+  if(!DATA || !DATA.locaties) return counts;
+  for(var i=0;i<DATA.locaties.length;i++){
+    var l = DATA.locaties[i];
+    if(!l || !l.slot) continue;
+    counts[l.slot] = (counts[l.slot] || 0) + 1;
+  }
+  return counts;
+}
 
   // --------- UI bind ----------
   function bindUI(){
@@ -816,19 +851,23 @@ function makePrestartStartSlot(){
     var txt = mp.label ? mp.label : 'Meeting point';
     meetingMarker.bindPopup('<b>'+esc(txt)+'</b>').closePopup();
   }
-function makeLabeledIcon(id, slot){
-  var txt = (id || '') + (slot ? (' • ' + slot) : '');
+function makeLabeledIcon(id, slot, slotCounts){
+  var n = (slot && slotCounts && slotCounts[slot]) ? slotCounts[slot] : 0;
+  var suffix = (n > 1) ? (' ×' + n) : '';
+  var txt = (id || '') + (slot ? (' • ' + slot + suffix) : '');
   return L.divIcon({
     className: 'locLabelIcon',
     html: '<div class="locLabelBubble">'+esc(txt)+'</div>',
-    iconSize: [0, 0],     // ✅ geen clipping box
+    iconSize: [0, 0],
     iconAnchor: [0, 0]
   });
 }
 
+
   function renderLocMarkers(){
     markerLayer.clearLayers();
     locRender = {};
+    var slotCounts = getSlotLocationCounts();
 
     for(var i=0;i<DATA.locaties.length;i++){
       (function(){
@@ -837,33 +876,45 @@ function makeLabeledIcon(id, slot){
 
         var m = L.marker([loc.lat, loc.lng], {
         draggable:true,
-        icon: makeLabeledIcon(loc.id, loc.slot)
+        icon: makeLabeledIcon(loc.id, loc.slot, slotCounts)
       });
 
         m.addTo(markerLayer);
 
-      var req = isSlotRequired(loc.slot);
-      var req = isSlotRequired(loc.slot);
+var req = isSlotRequired(loc.slot);
+var multi = (loc.slot && slotCounts[loc.slot] > 1);
 
-      var circleOpts = req
-        ? {
-            radius: (loc.radius || 50),
-            weight: 2,
-            opacity: 0.9,
-            fillOpacity: 0.10
-          }
-        : {
-            radius: (loc.radius || 50),
-            weight: 2,
-            color: '#666',          // ✅ andere kleur voor optioneel
-            fillColor: '#999',
-            opacity: 0.75,
-            fillOpacity: 0.05,
-            dashArray: '10 10',     // ✅ duidelijker patroon
-            lineCap: 'butt'         // ✅ dashes zien er echt uit als dashes
-          };
+// kleuren
+var COLOR_REQ_SINGLE = '#2A81FF';  // blauw (Leaflet-achtig)
+var COLOR_MULTI = '#7B4CFF';       // paars (varianten)
+var COLOR_OPT = '#666';            // grijs
 
-      var c = L.circle([loc.lat, loc.lng], circleOpts).addTo(markerLayer);
+var circleOpts;
+
+if(req){
+  circleOpts = {
+    radius: (loc.radius || 50),
+    weight: multi ? 3 : 2,
+    color: multi ? COLOR_MULTI : COLOR_REQ_SINGLE,
+    fillColor: multi ? COLOR_MULTI : COLOR_REQ_SINGLE,
+    opacity: 0.9,
+    fillOpacity: 0.10
+  };
+} else {
+  circleOpts = {
+    radius: (loc.radius || 50),
+    weight: 2,
+    color: multi ? COLOR_MULTI : COLOR_OPT,
+    fillColor: multi ? COLOR_MULTI : '#999',
+    opacity: multi ? 0.85 : 0.75,
+    fillOpacity: 0.05,
+    dashArray: '10 10',
+    lineCap: 'butt'
+  };
+}
+
+var c = L.circle([loc.lat, loc.lng], circleOpts).addTo(markerLayer);
+
 
 
 
@@ -899,6 +950,7 @@ function makeLabeledIcon(id, slot){
     var tb = byId('slotsTable').querySelector('tbody');
     var html = '';
     var sids = slotIds();
+    var slotCounts = getSlotLocationCounts();
 
     for(var i=0;i<DATA.slots.length;i++){
       var s = DATA.slots[i];
@@ -906,7 +958,14 @@ function makeLabeledIcon(id, slot){
 
       html += '<tr>';
       html += '<td><input data-i="'+i+'" data-k="id" class="slotInp" type="text" value="'+esc(s.id||'')+'"></td>';
-      html += '<td><input data-i="'+i+'" data-k="label" class="slotInp" type="text" value="'+esc(s.label||'')+'"></td>';
+      var count = slotCounts[s.id] || 0;
+      var badge = (count > 1) ? ' <span class="slotBadge">×'+count+'</span>' : '';
+
+      html += '<td>'
+        + '<input data-i="'+i+'" data-k="label" class="slotInp" type="text" value="'+esc(s.label||'')+'">'
+        + badge
+        + '</td>';
+
       html += '<td style="text-align:center"><input data-i="'+i+'" data-k="required" class="slotChk" type="checkbox" '+(s.required?'checked':'')+'></td>';
 
       // unlockAfterSlot dropdown (toon alle slots behalve zichzelf)
