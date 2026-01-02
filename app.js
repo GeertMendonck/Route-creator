@@ -215,7 +215,8 @@
       meta: {
         title: 'Nieuwe route',
         subtitle: '',
-        version: '1.0'
+        version: '1.0',
+        assetsBase: ''
         // characters optioneel
       },
       settings: {
@@ -872,7 +873,16 @@
     byId('metaTitle').addEventListener('input', function(){ DATA.meta.title = this.value; });
     byId('metaSubtitle').addEventListener('input', function(){ DATA.meta.subtitle = this.value; });
     byId('metaVersion').addEventListener('input', function(){ DATA.meta.version = this.value; });
-
+    var ab = byId('metaAssetsBase');
+    if(ab){
+    ab.addEventListener('input', function(){
+        if(!DATA.meta) DATA.meta = {};
+        var v = String(ab.value || '').trim();
+        // trailing slash afdwingen (consistent met je import)
+        if(v && v.slice(-1) !== '/') v += '/';
+        DATA.meta.assetsBase = v;
+    });
+    }
     byId('metaCharactersEnabled').addEventListener('change', function(){
       var enabled = !!this.checked;
       byId('metaCharactersBox').style.display = enabled ? 'block' : 'none';
@@ -1244,6 +1254,27 @@
 
     var ml = DATA.settings && DATA.settings.multiLocationSlotMode;
     if(ml && !ALLOWED_MULTI[ml]) issues.errors.push('settings.multiLocationSlotMode onbekend: ' + ml);
+        // ---- assetsBase (optie 2) ----
+        var ab = (DATA.meta && typeof DATA.meta.assetsBase === 'string') ? DATA.meta.assetsBase.trim() : '';
+
+        if(!ab){
+        issues.errors.push('meta.assetsBase ontbreekt: afbeeldingen en personages zullen niet laden.');
+        } else {
+        if(!/^https?:\/\//i.test(ab)){
+            issues.warns.push('meta.assetsBase lijkt geen geldige URL (verwacht https://...).');
+        }
+
+        if(ab.slice(-1) !== '/'){
+            issues.warns.push('meta.assetsBase eindigt niet op "/" (tip: voeg een trailing slash toe).');
+        }
+
+        // typische fout: base wijst per ongeluk naar images/ of personages/
+        if(/\/images\/?$/i.test(ab) || /\/personages\/?$/i.test(ab)){
+            issues.warns.push('meta.assetsBase wijst te diep (mag niet eindigen op /images of /personages).');
+        } else {
+            issues.oks.push('assetsBase staat goed: submappen images/ en personages/ worden automatisch gebruikt.');
+        }
+        }
 
     var seenSlots = {};
     var hasStartSlot = false;
@@ -1414,6 +1445,11 @@
         if(!obj || typeof obj !== 'object') throw new Error('Geen object');
 
         if(!obj.meta) obj.meta = { title:'(import)', subtitle:'', version:'1.0' };
+        if(typeof obj.meta.assetsBase !== 'string') obj.meta.assetsBase = '';
+        obj.meta.assetsBase = obj.meta.assetsBase.trim();
+        if(obj.meta.assetsBase && obj.meta.assetsBase.slice(-1) !== '/'){
+        obj.meta.assetsBase += '/';
+        }
         if(!obj.settings) obj.settings = defaultData().settings;
         if(!obj.prestart) obj.prestart = defaultData().prestart;
         if(!obj.slots) obj.slots = [];
@@ -1449,6 +1485,7 @@
     byId('metaTitle').value = DATA.meta.title || '';
     byId('metaSubtitle').value = DATA.meta.subtitle || '';
     byId('metaVersion').value = DATA.meta.version || '1.0';
+    byId('metaAssetsBase').value = DATA.meta.assetsBase || ''; // ✅ nieuw
 
     var hasChars = !!(DATA.meta && DATA.meta.characters);
     byId('metaCharactersEnabled').checked = hasChars;
