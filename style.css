@@ -271,7 +271,7 @@ th{
 }
 
 .mapLegend .swLine.opt{
-  border-top:3px solid rgba(0,0,0,.6);
+  border-top-style: dashed;
   opacity:.8;
 }
 
