@@ -1,6 +1,217 @@
 // app.js
 (function(){
   'use strict';
+// ---------------- Tooltips (hover + focus) ----------------
+(function initTooltips(){
+  var tipEl = document.getElementById('uiTip');
+  if(!tipEl) return;
+
+  function setTipPosition(x, y){
+    // Houd tooltip binnen viewport
+    var pad = 12;
+    var rect = tipEl.getBoundingClientRect();
+    var vw = window.innerWidth, vh = window.innerHeight;
+
+    var left = x + 14;
+    var top  = y + 14;
+
+    if(left + rect.width + pad > vw) left = Math.max(pad, x - rect.width - 14);
+    if(top  + rect.height + pad > vh) top  = Math.max(pad, y - rect.height - 14);
+
+    tipEl.style.left = left + 'px';
+    tipEl.style.top  = top + 'px';
+  }
+
+  function showTipFor(target, x, y){
+    var title = target.getAttribute('data-tip-title') || '';
+    var body  = target.getAttribute('data-tip') || '';
+    if(!body) return;
+
+    tipEl.innerHTML =
+      (title ? '<div class="tTitle">'+escapeHtml(title)+'</div>' : '') +
+      '<div class="tBody">'+body+'</div>';
+
+    tipEl.setAttribute('aria-hidden','false');
+    tipEl.classList.add('show');
+
+    // Eerst even renderen zodat rect klopt
+    requestAnimationFrame(function(){
+      setTipPosition(x, y);
+    });
+  }
+
+  function hideTip(){
+    tipEl.classList.remove('show');
+    tipEl.setAttribute('aria-hidden','true');
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(m){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]);
+    });
+  }
+
+  // Hover
+  document.addEventListener('mousemove', function(e){
+    var t = e.target && e.target.closest ? e.target.closest('[data-tip]') : null;
+    if(!t){ hideTip(); return; }
+    showTipFor(t, e.clientX, e.clientY);
+  });
+
+  // Focus (keyboard)
+  document.addEventListener('focusin', function(e){
+    var t = e.target && e.target.closest ? e.target.closest('[data-tip]') : null;
+    if(!t){ hideTip(); return; }
+    var r = t.getBoundingClientRect();
+    showTipFor(t, r.left + r.width/2, r.top + r.height/2);
+  });
+
+  document.addEventListener('scroll', hideTip, true);
+  window.addEventListener('blur', hideTip);
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape') hideTip();
+  });
+})();
+// ---------------- Tooltip-teksten koppelen aan IDs ----------------
+(function attachTips(){
+  var tips = {
+    // Buttons bovenaan
+    btnNew: {
+      title: 'Nieuw',
+      body: 'Start met een leeg scenario (meta, settings, slots en locaties). Tip: exporteer eerst als je huidige werk wil bewaren.'
+    },
+    btnExport: {
+      title: 'Export JSON',
+      body: 'Download je huidige scenario als JSON-bestand. Handig om meteen in je geo-app te gebruiken, of om er lateer de vragen en afbeeldingen aan toe te voegen.'
+    },
+    btnImport: {
+      title: 'Import JSON',
+      body: 'Laad een eerder geëxporteerd JSON-bestand terug in. Dit overschrijft de huidige inhoud.'
+    },
+    fileImport: {
+      title: 'Bestand kiezen',
+      body: 'Kies een .json bestand om te importeren. Laat je toe om een vroeger versie terug in te laden en indien gewenst aan te passen.'
+    },
+
+    // Meta
+    metaTitle: { title:'Titel', body:'Hoofdtitel van je route/scenario (verschijnt in je app).'},
+    metaSubtitle: { title:'Subtitel', body:'Korte ondertitel (optioneel).'},
+    metaVersion: { title:'Versie', body:'Versienummer van dit scenario. Handig als je meerdere iteraties hebt.'},
+
+    metaCharactersEnabled: {
+      title:'Personages gebruiken',
+      body:'Als dit aan staat, exporteren we <code>meta.characters</code> mee en kan je app personages laden.'
+    },
+    metaCharactersSource: {
+      title:'Personages bronbestand',
+      body:'Bestandsnaam of pad (bv. <code>personages.json</code>) waar je app de personages kan laden.'
+    },
+
+    // Settings
+    setVisibilityMode: {
+      title:'visibilityMode',
+      body:'Bepaalt welke slots/locaties zichtbaar zijn. <br><b>nextOnly</b>: enkel de volgende stap. <br><b>allAfterStart</b>: alles na start. <br><b>all</b>: alles meteen.'
+    },
+    setMultiLocSlotMode: {
+      title:'multiLocationSlotMode',
+      body:'Als één slot meerdere locaties heeft: <br><b>any</b>: eender welke is ok. <br><b>random</b>: kies willekeurig. <br><b>nearest</b>: dichtstbij. <br><b>all</b>: allemaal verplicht.'
+    },
+    setShowOptionalSlots: {
+      title:'showOptionalSlots',
+      body:'Toont (true) of verbergt (false) optionele slots in de UI.'
+    },
+    setListShowFutureSlots: {
+      title:'listShowFutureSlots',
+      body:'Toon toekomstige slots al in de lijst (true) of pas wanneer ze unlocked zijn (false). (Op route niveau)'
+    },
+    setMapShowFutureLocations: {
+      title:'mapShowFutureLocations',
+      body:'Toon toekomstige locaties al op de kaart (true) of pas wanneer ze unlocked zijn (false). (Op route niveau)'
+    },
+
+    // Prestart
+    preUseLocationId: {
+      title:'useLocationId',
+      body:'Kies welke locatie als “startlocatie” gebruikt wordt voor prestart-checks (bv. of je al aan het beginpunt bent).'
+    },
+    preMeetingLabel: {
+      title:'meetingPoint label',
+      body:'Tekstlabel voor het ontmoetingspunt.'
+    },
+    preMeetingLat: { title:'meetingPoint lat', body:'Latitude van het meeting point.'},
+    preMeetingLng: { title:'meetingPoint lng', body:'Longitude van het meeting point.'},
+
+    btnSetMeetingPoint: {
+      title:'Meeting point zetten via kaartklik',
+      body:'Klik en dan op de kaart om het meeting point te plaatsen. (Tip: handig als je niet wil copy-pasten van Google Maps.)'
+    },
+    btnMakePrestartStartSlot: {
+      title:'Maak prestart = startslot + startlocatie',
+      body:'Maakt een startslot en startlocatie aan op basis van prestart-gegevens. Handig als je scenario nog geen start heeft.'
+    },
+    preMessage: {
+      title:'message',
+      body:'Tekst die je gebruiker ziet als die nog niet aan de startlocatie is.'
+    },
+    preMapsLabel: {
+      title:'maps.label',
+      body:'Label voor de knop/actie die navigatie naar het startpunt opent (bv. “Route naar startpunt”).'
+    },
+    btnSyncPrestartStart: {
+      title:'Sync prestart → startslot+startloc (veilig)',
+      body:'Zet prestart-gegevens om naar startslot + startlocatie, zonder bestaande data roekeloos te overschrijven.'
+    },
+
+    // Slots
+    btnAddSlot: {
+      title:'+ Slot',
+      body:'Voegt een slot toe (een stap/fase in de route). Denk aan: start → stop1 → stop2 → einde.'
+    },
+    slotsTable: {
+      title:'Slots tabel',
+      body:'Hier beheer je de volgorde en logica van de route. <br><b>unlockAfter</b> bepaalt wanneer een slot beschikbaar wordt (volgt de logica van in de settings).'
+    },
+
+    // Locaties
+    locsTable: {
+      title:'Locaties tabel',
+      body:'Hier zie je alle locaties (markers). Klik op een rij om er naartoe te zoomen. Sleep markers op de kaart om lat/lng te wijzigen. Er kunnen meerdere locaties bij één slot horen.'
+    },
+
+    // Controle
+    validationBox: {
+      title:'Controle',
+      body:'Hier verschijnen waarschuwingen en fouten (bv. dubbele IDs, ontbrekende start, slots zonder locaties, …).'
+    },
+
+    // Map
+    map: {
+      title:'Kaart',
+      body:'Klik om een nieuwe locatie toe te voegen. Sleep markers om coördinaten te verfijnen. <br>Tip: zoom in voor precisie.'
+    }
+  };
+
+  Object.keys(tips).forEach(function(id){
+    var el = document.getElementById(id);
+    if(!el) return;
+    el.setAttribute('data-tip-title', tips[id].title || '');
+    el.setAttribute('data-tip', tips[id].body || '');
+  });
+
+  // Extra: ook labels hoverbaar maken (als je wil)
+  // (optioneel) Koppel label[for] aan input-tip
+  var labels = document.querySelectorAll('label[for]');
+  for(var i=0;i<labels.length;i++){
+    var lab = labels[i];
+    var forId = lab.getAttribute('for');
+    if(!forId) continue;
+    var target = document.getElementById(forId);
+    if(target && target.getAttribute('data-tip')){
+      lab.setAttribute('data-tip-title', target.getAttribute('data-tip-title') || 'Info');
+      lab.setAttribute('data-tip', target.getAttribute('data-tip'));
+    }
+  }
+})();
 
   // =========================
   // Data model

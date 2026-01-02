@@ -315,3 +315,43 @@ th{
 .mapLegend input[type="checkbox"]{
   transform:scale(1.05);
 }
+
+.uiTip{
+  position: fixed;
+  z-index: 9999;
+  max-width: 320px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(15, 36, 48, .98);
+  color: #e8f4f7;
+  font-size: 13px;
+  line-height: 1.35;
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity .12s ease, transform .12s ease;
+}
+
+.uiTip.show{
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.uiTip .tTitle{
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.uiTip .tBody{
+  opacity: .95;
+}
+
+.uiTip kbd{
+  font: inherit;
+  background: rgba(255,255,255,.08);
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.12);
+}
+
