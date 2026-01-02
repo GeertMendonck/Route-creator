@@ -381,40 +381,42 @@ legendCtrl.onAdd = function(){
   var div = L.DomUtil.create('div', 'mapLegend');
  
 div.innerHTML =
-'<div class="lgTitle" id="legendTitle" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px">' +
+  '<div class="lgTitle" id="legendTitle" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px">' +
   '  <span>Legenda</span>' +
   '  <span id="legendChevron" style="opacity:.75">▾</span>' +
   '</div>' +
+
   '<div id="legendBody">' +
-     '<div class="lgToggle" style="margin-top:8px">' +
-  '  <input id="toggleLabels" type="checkbox" checked>' +
-  '  <label for="toggleLabels">Toon labels</label>' +
+
+  '  <div class="lgToggle" style="margin-top:8px">' +
+  '    <input id="toggleLabels" type="checkbox" checked>' +
+  '    <label for="toggleLabels">Toon labels</label>' +
+  '  </div>' +
+
+  '  <div class="lgRow"><span class="swCircle swStart"></span> Start</div>' +
+  '  <div class="lgRow"><span class="swCircle swEnd"></span> Eind</div>' +
+
+  '  <div class="lgRow" style="margin-top:6px"><span class="swCircle swReqSingle"></span> Vereist</div>' +
+  '  <div class="lgRow"><span class="swCircle swReqMulti"></span> Vereist (meerdere locaties)</div>' +
+  '  <div class="lgRow"><span class="swCircle swOptSingle"></span> Optioneel</div>' +
+  '  <div class="lgRow"><span class="swCircle swOptMulti"></span> Optioneel (meerdere locaties)</div>' +
+
+  '  <div class="lgToggle" style="margin-top:8px">' +
+  '    <input id="toggleRouteArrows" type="checkbox" checked>' +
+  '    <label for="toggleRouteArrows">Toon routelijnen</label>' +
+  '  </div>' +
+
+  '  <div id="arrowLegendDetails" style="margin-top:6px">' +
+  '    <div class="lgRow"><span class="swLine"></span> Route naar vereist</div>' +
+  '    <div class="lgRow"><span class="swLine opt"></span> Route naar optioneel</div>' +
+  '  </div>' +
+
+  '  <div class="lgActions">' +
+  '    <button id="btnFitRoute" type="button">📍 Centreer op route</button>' +
+  '  </div>' +
+
   '</div>';
-  '<div class="lgTitle">Legenda</div>' +
 
-  '<div class="lgRow"><span class="swCircle swStart"></span> Start</div>' +
-  '<div class="lgRow"><span class="swCircle swEnd"></span> Eind</div>' +
-
-  '<div class="lgRow" style="margin-top:6px">' +
-  '<span class="swCircle swReqSingle"></span> Vereist</div>' +
-  '<div class="lgRow"><span class="swCircle swReqMulti"></span> Vereist (meerdere locaties)</div>' +
-  '<div class="lgRow"><span class="swCircle swOptSingle"></span> Optioneel</div>' +
-  '<div class="lgRow"><span class="swCircle swOptMulti"></span> Optioneel (meerdere locaties)</div>' +
-
-  '<div class="lgToggle" style="margin-top:8px">' +
-  '  <input id="toggleRouteArrows" type="checkbox" checked>' +
-  '  <label for="toggleRouteArrows">Toon routelijnen</label>' +
-  '</div>' +
-
-  '<div id="arrowLegendDetails" style="margin-top:6px">' +
-  '  <div class="lgRow"><span class="swLine"></span> Route naar vereist</div>' +
-  '  <div class="lgRow"><span class="swLine opt"></span> Route naar optioneel</div>' +
-  '</div>' +
-
-  '<div class="lgActions">' +
-  '  <button id="btnFitRoute" type="button">📍 Centreer op route</button>' +
-  '</div>';
-'</div>';
 
   // voorkomen dat scroll/drag op de kaart “meepakt” als je op de legenda klikt
   L.DomEvent.disableClickPropagation(div);
