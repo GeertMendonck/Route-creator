@@ -182,13 +182,7 @@
     validationBox: {
       title:'Controle',
       body:'Hier verschijnen waarschuwingen en fouten (bv. dubbele IDs, ontbrekende start, slots zonder locaties, …).'
-    },
-
-    // Map
-    map: {
-      title:'Kaart',
-      body:'Klik om een nieuwe locatie toe te voegen. Sleep markers om coördinaten te verfijnen. <br>Tip: zoom in voor precisie.'
-    }
+    }   
   };
 
   Object.keys(tips).forEach(function(id){
